@@ -2,7 +2,7 @@ package dirk
 
 import "fmt"
 
-func PrintW() {
-	fmt.Print("---")
+func PrintW(toWrite string) {
+	fmt.Print(toWrite)
 	GetChar()
 }

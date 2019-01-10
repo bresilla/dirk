@@ -18,62 +18,12 @@ var (
 	cmd       *exec.Cmd
 )
 
-/*
-	Open a file, directory, or URI using the OS's default
-	application for that object type. Wait for the open
-	command to complete.
-*/
-func Run(input string) error {
-	return open(input).Run()
-}
-
-/*
-	Open a file, directory, or URI using the OS's default
-	application for that object type. Don't wait for the
-	open command to complete.
-*/
-func Start(input string) error {
-	return open(input).Start()
-}
-
-/*
-	Open a file, directory, or URI using the specified application.
-	Wait for the open command to complete.
-*/
-func RunWith(input string, appName string) error {
-	return openWith(input, appName).Run()
-}
-
-/*
-	Open a file, directory, or URI using the specified application.
-	Don't wait for the open command to complete.
-*/
-func StartWith(input string, appName string) error {
-	return openWith(input, appName).Start()
-}
-
 func open(input string) *exec.Cmd {
 	return exec.Command("xdg-open", input)
 }
 
 func openWith(input string, appName string) *exec.Cmd {
 	return exec.Command(appName, input)
-}
-
-func Edit(file string) error {
-	editor := os.Getenv("EDITOR")
-	if len(editor) > 0 {
-		cmd = exec.Command(editor, file)
-	} else {
-		cmd = exec.Command("/usr/bin/env", "nvim", file)
-	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("Error:", err)
-	}
-	return nil
 }
 
 func RenameExist(name string) string {
@@ -209,7 +159,7 @@ func createDir(dirName string) bool {
 	return false
 }
 
-func (dir File) ListDir(files Files) {
+func (dir File) ListDir() (files Files) {
 	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
 	for _, d := range list {
 		files = append(files, d)
@@ -229,77 +179,13 @@ func (dir File) Select(files Files, number int) (selected Files) {
 	return
 }
 
-func (dir File) Copy(names Files) error {
-	for _, file := range names {
-		if err := cpAny(file.Path, dir.Path); err != nil {
-			return fmt.Errorf("Could not copy file!")
-		}
-	}
-	return nil
-}
-
-func (dir File) Move(names Files) error {
-	for _, file := range names {
-		if err := cpAny(file.Path, dir.Path); err != nil {
-			return fmt.Errorf("Could not copy file")
-		} else if err := os.RemoveAll(file.Path); err != nil {
-			return fmt.Errorf("Could not delete file")
-		}
-	}
-	return nil
-}
-
-func (dir File) Delete(names Files) error {
-	for _, file := range names {
-		if err := os.RemoveAll(file.Path); err != nil {
-			return fmt.Errorf("Could not delete file")
-		}
-	}
-	return nil
-}
-
-func (dir File) Write(name string, bytes []byte) error {
+func (dir File) Touch(name string) error {
 	newFileName := dir.Path + "/" + name
 	newFileName = RenameExist(newFileName)
-	if _, err := os.Create(newFileName); err != nil {
+	if newFile, err := os.Create(newFileName); err != nil {
 		return fmt.Errorf("Could not create file")
-	} else if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
-		if _, err := newFile.Write(bytes); err != nil {
-			return fmt.Errorf("Could not write file")
-		} else {
-			newFile.Close()
-		}
-	}
-	return nil
-}
-
-func (dir File) Append(name string, bytes []byte) error {
-	newFileName := dir.Path + "/" + name
-	if _, err := os.Stat(newFileName); !os.IsNotExist(err) {
-		if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
-			if _, err := newFile.Write(bytes); err != nil {
-				return fmt.Errorf("Could not write file")
-			} else {
-				newFile.Close()
-			}
-		}
 	} else {
-		if err := dir.Write(name, bytes); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (dir File) Overite(name string, bytes []byte) error {
-	fileName := dir.Path + "/" + name
-	if _, err := os.Stat(fileName); !os.IsNotExist(err) {
-		if err := os.RemoveAll(fileName); err != nil {
-			return fmt.Errorf("Could not delete file")
-		}
-	}
-	if err := dir.Write(name, bytes); err != nil {
-		return err
+		newFile.Close()
 	}
 	return nil
 }
@@ -313,12 +199,111 @@ func (dir File) Mkdir(name string) error {
 	return nil
 }
 
-func (dir File) Rename(oldname, name string) error {
-	newFileName := dir.Path + "/" + name
-	oldFileName := dir.Path + "/" + oldname
-	newFileName = RenameExist(newFileName)
-	if err := os.Rename(oldFileName, newFileName); err != nil {
-		return fmt.Errorf("Could not create folder")
+func (files Files) Paste(dir File) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if _, err := os.Stat(files[i].Path); !os.IsNotExist(err) {
+			if err := cpAny(files[i].Path, dir.Path); err != nil {
+				return fmt.Errorf("Could not copy file!")
+			}
+		}
+	}
+	return nil
+}
+
+func (files Files) Move(dir File) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if _, err := os.Stat(files[i].Path); !os.IsNotExist(err) {
+			if err := cpAny(files[i].Path, dir.Path); err != nil {
+				return fmt.Errorf("Could not copy file")
+			} else if err := os.RemoveAll(files[i].Path); err != nil {
+				return fmt.Errorf("Could not delete file")
+			}
+		}
+	}
+	return nil
+}
+
+func (files Files) Delete() error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if err := os.RemoveAll(files[i].Path); err != nil {
+			return fmt.Errorf("Could not delete file")
+		}
+	}
+	return nil
+}
+
+func (files Files) Write(bytes []byte) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		newFileName := RenameExist(files[i].Path)
+		if _, err := os.Create(newFileName); err != nil {
+			return fmt.Errorf("Could not create file")
+		} else if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
+			if _, err := newFile.Write(bytes); err != nil {
+				return fmt.Errorf("Could not write file")
+			} else {
+				newFile.Close()
+			}
+		}
+	}
+	return nil
+}
+
+func (files Files) Append(bytes []byte) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if _, err := os.Stat(files[i].Path); !os.IsNotExist(err) {
+			if newFile, err := os.OpenFile(files[i].Path, os.O_RDWR|os.O_APPEND, 0777); err == nil {
+				if _, err := newFile.Write(bytes); err != nil {
+					return fmt.Errorf("Could not write file")
+				} else {
+					newFile.Close()
+				}
+			}
+		} else {
+			if err := files.Write(bytes); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (files Files) Overite(bytes []byte) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	if err := files.Delete(); err != nil {
+		return err
+	}
+	if err := files.Write(bytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (files Files) Rename(name []string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		newFileName := RenameExist(name[i])
+		if err := os.Rename(files[i].Path, newFileName); err != nil {
+			return fmt.Errorf("Could not create folder")
+		}
 	}
 	return nil
 }
@@ -326,6 +311,38 @@ func (dir File) Rename(oldname, name string) error {
 func (dir File) Bulkname(names Files) error {
 	for _, file := range names {
 		print(file.Path)
+	}
+	return nil
+}
+
+func Run(input string) error {
+	return open(input).Run()
+}
+
+func Start(input string) error {
+	return open(input).Start()
+}
+
+func RunWith(input string, appName string) error {
+	return openWith(input, appName).Run()
+}
+
+func StartWith(input string, appName string) error {
+	return openWith(input, appName).Start()
+}
+
+func Edit(file string) error {
+	editor := os.Getenv("EDITOR")
+	if len(editor) > 0 {
+		cmd = exec.Command(editor, file)
+	} else {
+		cmd = exec.Command("/usr/bin/env", "nvim", file)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Error:", err)
 	}
 	return nil
 }
