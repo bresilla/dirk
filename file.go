@@ -299,6 +299,18 @@ func MakeFile(dir string) (file File, err error) {
 	return
 }
 
+func MakeFiles(dir []string) (files Files, err error) {
+	files = Files{}
+	for i := range dir {
+		if file, err := MakeFile(dir[i]); err != nil {
+			return files, err
+		} else {
+			files = append(files, file)
+		}
+	}
+	return files, nil
+}
+
 func fileList(recurrent bool, dir File) (paths Files, err error) {
 	paths = Files{}
 	if recurrent {

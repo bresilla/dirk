@@ -167,14 +167,6 @@ func (dir File) ListDir() (files Files) {
 	return
 }
 
-func (dir File) ListFile() (files Files) {
-	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
-	for _, d := range list {
-		files = append(files, d)
-	}
-	return
-}
-
 func (dir File) Select(files Files, number int) (selected Files) {
 	for i := range files {
 		if files[i].Other.Selected {
@@ -392,7 +384,8 @@ func (files Files) Edit() error {
 	return nil
 }
 
-type Explore interface {
+type Explorer interface {
+	FileIt(path string) (files Files, err error)
 	ListDir() (files Files)
 	Select(files Files, number int) (selected Files)
 	Touch(name string) error
