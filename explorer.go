@@ -167,6 +167,14 @@ func (dir File) ListDir() (files Files) {
 	return
 }
 
+func (dir File) ListFile() (files Files) {
+	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
+	for _, d := range list {
+		files = append(files, d)
+	}
+	return
+}
+
 func (dir File) Select(files Files, number int) (selected Files) {
 	for i := range files {
 		if files[i].Other.Selected {
@@ -315,53 +323,93 @@ func (dir File) Bulkname(names Files) error {
 	return nil
 }
 
-func Run(input string) error {
-	return open(input).Run()
-}
-
-func Start(input string) error {
-	return open(input).Start()
-}
-
-func RunWith(input string, appName string) error {
-	return openWith(input, appName).Run()
-}
-
-func StartWith(input string, appName string) error {
-	return openWith(input, appName).Start()
-}
-
-func Edit(file string) error {
-	editor := os.Getenv("EDITOR")
-	if len(editor) > 0 {
-		cmd = exec.Command(editor, file)
-	} else {
-		cmd = exec.Command("/usr/bin/env", "nvim", file)
+func (files Files) Run() error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
 	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("Error:", err)
+	for i := range files {
+		if err := open(files[i].Path).Run(); err != nil {
+			return fmt.Errorf("Could not open file")
+		}
 	}
 	return nil
 }
 
-type Explorer interface {
-	ListDir(dir File) Files
+func (files Files) Start() error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if err := open(files[i].Path).Start(); err != nil {
+			return fmt.Errorf("Could not open file")
+		}
+	}
+	return nil
+}
+
+func (files Files) RunWith(name string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if err := openWith(name, files[i].Path).Run(); err != nil {
+			return fmt.Errorf("Could no open file")
+		}
+	}
+	return nil
+}
+
+func (files Files) StartWith(name string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if err := openWith(name, files[i].Path).Start(); err != nil {
+			return fmt.Errorf("Could not open file")
+		}
+	}
+	return nil
+}
+
+func (files Files) Edit() error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		editor := os.Getenv("EDITOR")
+		if len(editor) > 0 {
+			cmd = exec.Command(editor, files[i].Path)
+		} else {
+			cmd = exec.Command("/usr/bin/env", "nvim", files[i].Path)
+		}
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		err := cmd.Run()
+		if err != nil {
+			return fmt.Errorf("Error:", err)
+		}
+	}
+	return nil
+}
+
+type Explore interface {
+	ListDir() (files Files)
 	Select(files Files, number int) (selected Files)
-	Move(path string, names []string) error
-	Copy(path string, names []string) error
-	Delete(path []string) error
-	Rename(path, name string) error
-	Bulkname(path []string) error
-	Write(path, name string, bytes []byte) error
-	Append(path, name string, bytes []byte) error
-	Overite(path, name string, bytes []byte) error
-	Mkdir(path, name string) error
-	Run(path string) error
-	RunWith(path string, app string) error
-	Start(path string) error
-	StartWith(path string, app string) error
-	Edit(path string) error
+	Touch(name string) error
+	Mkdir(name string) error
+}
+
+type Explorers interface {
+	Paste(dir File) error
+	Move(dir File) error
+	Delete() error
+	Write(bytes []byte) error
+	Append(bytes []byte) error
+	Overite(bytes []byte) error
+	Rename(name []string) error
+	Run() error
+	RunWith(name string) error
+	Start() error
+	StartWith(name string) error
+	Edit() error
 }
