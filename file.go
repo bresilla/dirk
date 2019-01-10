@@ -16,10 +16,6 @@ import (
 var (
 	IgnoreSlice = []string{}
 	IgnoreRecur = []string{"node_modules", ".git"}
-	IncFolder   = true
-	IncFiles    = true
-	IncHidden   = false
-	Recurrent   = false
 	DiskUse     = false
 )
 
@@ -196,32 +192,32 @@ var categoryicons = map[string]string{
 }
 
 type File struct {
-	Number    int
-	Path      string
-	Name      string
-	Parent    string
-	Ancestors []string
-	Childrens []string
-	Mime      string
-	Extension string
-	IsDir     bool
-	Hidden    bool
-	Size      int64
-	Mode      os.FileMode
-	BrtTime   time.Time
-	AccTime   time.Time
-	ChgTime   time.Time
-	Other     Other
+	Number     int
+	Path       string
+	Name       string
+	Parent     string
+	ParentPath string
+	Ancestors  []string
+	Childrens  []string
+	Mime       string
+	Extension  string
+	IsDir      bool
+	Hidden     bool
+	Size       int64
+	Mode       os.FileMode
+	BrtTime    time.Time
+	AccTime    time.Time
+	ChgTime    time.Time
+	Other      Other
 }
 type Other struct {
-	Children   int
-	Selected   bool
-	Active     bool
-	ParentPath string
-	HumanSize  string
-	Deep       int
-	Ignore     bool
-	Icon       string
+	Children  int
+	Selected  bool
+	Active    bool
+	HumanSize string
+	Deep      int
+	Ignore    bool
+	Icon      string
 }
 
 type Files []File
@@ -229,7 +225,7 @@ type Files []File
 func (e Files) String(i int) string    { return e[i].Name }
 func (e Files) Len() int               { return len(e) }
 func (e Files) Swap(i, j int)          { e[i], e[j] = e[j], e[i] }
-func (e Files) Less(i, j int) bool     { return e[i].Name < e[j].Name }
+func (e Files) Less(i, j int) bool     { return e[i].Name[1:] < e[j].Name[1:] }
 func (e Files) SortSize(i, j int) bool { return e[i].Size < e[j].Size }
 func (e Files) SortDate(i, j int) bool { return e[i].BrtTime.Before(e[j].BrtTime) }
 
@@ -239,6 +235,7 @@ func MakeFile(dir string) (file File, err error) {
 		return
 	}
 	osStat := f.Sys().(*syscall.Stat_t)
+
 	parent := "/"
 	parentPath := "/"
 	name := "/"
@@ -253,15 +250,16 @@ func MakeFile(dir string) (file File, err error) {
 		}
 	}
 	file = File{
-		Path:    dir,
-		Name:    name,
-		Parent:  parent,
-		Size:    f.Size(),
-		Mode:    f.Mode(),
-		IsDir:   f.IsDir(),
-		BrtTime: timespecToTime(osStat.Mtim),
-		AccTime: timespecToTime(osStat.Atim),
-		ChgTime: timespecToTime(osStat.Ctim),
+		Path:       dir,
+		Name:       name,
+		Parent:     parent,
+		ParentPath: parentPath,
+		Size:       f.Size(),
+		Mode:       f.Mode(),
+		IsDir:      f.IsDir(),
+		BrtTime:    timespecToTime(osStat.Mtim),
+		AccTime:    timespecToTime(osStat.Atim),
+		ChgTime:    timespecToTime(osStat.Ctim),
 	}
 
 	if f.IsDir() {
@@ -289,7 +287,6 @@ func MakeFile(dir string) (file File, err error) {
 	}
 	file.Ancestors = strings.Split(dir, "/")
 	file.Other.Deep = len(file.Ancestors)
-	file.Other.ParentPath = parentPath
 	if string(name[0]) == "." {
 		file.Hidden = true
 	}
@@ -380,36 +377,4 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 		list[i].Number = i
 	}
 	return
-}
-
-func sortFiles(list Files, s bool) {
-	if s {
-		sort.Sort(Files(list))
-	} else {
-		sort.Sort(sort.Reverse(list))
-	}
-}
-
-func ListFiles(dir File) (files Files, parent File) {
-	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
-	parent, _ = MakeFile(path.Dir(dir.Path))
-	for _, d := range list {
-		files = append(files, d)
-	}
-	return
-}
-
-func CreateDirectory(dirName string) bool {
-	src, err := os.Stat(dirName)
-	if os.IsNotExist(err) {
-		errDir := os.MkdirAll(dirName, 0755)
-		if errDir != nil {
-			panic(err)
-		}
-		return true
-	}
-	if src.Mode().IsRegular() {
-		return false
-	}
-	return false
 }
