@@ -80,13 +80,13 @@ func RenameExist(name string) string {
 	if _, err := os.Stat(name); err == nil {
 		i := 1
 		for {
-			if _, err := os.Stat(name + strconv.Itoa(i)); err == nil {
+			if _, err := os.Stat(name + "(" + strconv.Itoa(i) + ")"); err == nil {
 				i++
 			} else {
 				break
 			}
 		}
-		return name + strconv.Itoa(i)
+		return name + "(" + strconv.Itoa(i) + ")"
 	}
 	return name
 }
@@ -209,7 +209,7 @@ func createDir(dirName string) bool {
 	return false
 }
 
-func ListDir(dir File) (files Files) {
+func (dir File) ListDir(files Files) {
 	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
 	for _, d := range list {
 		files = append(files, d)
@@ -217,73 +217,130 @@ func ListDir(dir File) (files Files) {
 	return
 }
 
-func Select(files Files, number int) []string {
-	selected := []string{}
+func (dir File) Select(files Files, number int) (selected Files) {
 	for i := range files {
 		if files[i].Other.Selected {
-			selected = append(selected, files[i].Path)
+			selected = append(selected, files[i])
 		}
 	}
-	if len(selected) < 1 {
-		selected = append(selected, files[number].Path)
+	if len(selected) == 0 {
+		selected = append(selected, files[number])
 	}
-	return selected
+	return
 }
 
-func Copy(path []string, newPath string) error {
-	for _, file := range path {
-		if err := cpAny(file, newPath); err != nil {
+func (dir File) Copy(names Files) error {
+	for _, file := range names {
+		if err := cpAny(file.Path, dir.Path); err != nil {
 			return fmt.Errorf("Could not copy file!")
 		}
 	}
 	return nil
 }
 
-func Move(path []string, newPath string) error {
-	for _, file := range path {
-		if err := cpAny(file, newPath); err != nil {
+func (dir File) Move(names Files) error {
+	for _, file := range names {
+		if err := cpAny(file.Path, dir.Path); err != nil {
 			return fmt.Errorf("Could not copy file")
-		} else if err := os.RemoveAll(file); err != nil {
+		} else if err := os.RemoveAll(file.Path); err != nil {
 			return fmt.Errorf("Could not delete file")
 		}
 	}
 	return nil
 }
 
-func Delete(path []string, newPath string) error {
-	for _, file := range path {
-		if err := os.RemoveAll(file); err != nil {
+func (dir File) Delete(names Files) error {
+	for _, file := range names {
+		if err := os.RemoveAll(file.Path); err != nil {
 			return fmt.Errorf("Could not delete file")
 		}
 	}
 	return nil
 }
 
-func Touch(path, name string) error {
-	name = RenameExist(name)
-	if newFile, err := os.Create(name); err != nil {
+func (dir File) Write(name string, bytes []byte) error {
+	newFileName := dir.Path + "/" + name
+	newFileName = RenameExist(newFileName)
+	if _, err := os.Create(newFileName); err != nil {
 		return fmt.Errorf("Could not create file")
-	} else {
-		newFile.Close()
+	} else if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
+		if _, err := newFile.Write(bytes); err != nil {
+			return fmt.Errorf("Could not write file")
+		} else {
+			newFile.Close()
+		}
 	}
 	return nil
 }
 
-func Mkdir(path, name string) error {
-	name = RenameExist(name)
-	if err := os.MkdirAll(name, 0777); err != nil {
+func (dir File) Append(name string, bytes []byte) error {
+	newFileName := dir.Path + "/" + name
+	if _, err := os.Stat(newFileName); !os.IsNotExist(err) {
+		if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
+			if _, err := newFile.Write(bytes); err != nil {
+				return fmt.Errorf("Could not write file")
+			} else {
+				newFile.Close()
+			}
+		}
+	} else {
+		if err := dir.Write(name, bytes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (dir File) Overite(name string, bytes []byte) error {
+	fileName := dir.Path + "/" + name
+	if _, err := os.Stat(fileName); !os.IsNotExist(err) {
+		if err := os.RemoveAll(fileName); err != nil {
+			return fmt.Errorf("Could not delete file")
+		}
+	}
+	if err := dir.Write(name, bytes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (dir File) Mkdir(name string) error {
+	newFileName := dir.Path + "/" + name
+	newFileName = RenameExist(newFileName)
+	if err := os.MkdirAll(newFileName, 0777); err != nil {
 		return fmt.Errorf("Could not create folder")
+	}
+	return nil
+}
+
+func (dir File) Rename(oldname, name string) error {
+	newFileName := dir.Path + "/" + name
+	oldFileName := dir.Path + "/" + oldname
+	newFileName = RenameExist(newFileName)
+	if err := os.Rename(oldFileName, newFileName); err != nil {
+		return fmt.Errorf("Could not create folder")
+	}
+	return nil
+}
+
+func (dir File) Bulkname(names Files) error {
+	for _, file := range names {
+		print(file.Path)
 	}
 	return nil
 }
 
 type Explorer interface {
 	ListDir(dir File) Files
-	Select(files Files, number int) []string
-	Move(path []string, newPath string) error
-	Copy(path []string, newPath string) error
+	Select(files Files, number int) (selected Files)
+	Move(path string, names []string) error
+	Copy(path string, names []string) error
 	Delete(path []string) error
-	Touch(path, name string) error
+	Rename(path, name string) error
+	Bulkname(path []string) error
+	Write(path, name string, bytes []byte) error
+	Append(path, name string, bytes []byte) error
+	Overite(path, name string, bytes []byte) error
 	Mkdir(path, name string) error
 	Run(path string) error
 	RunWith(path string, app string) error
