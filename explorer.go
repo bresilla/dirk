@@ -1,11 +1,13 @@
 package dirk
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 )
@@ -159,6 +161,20 @@ func createDir(dirName string) bool {
 	return false
 }
 
+func readLines(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
 func (dir File) ListDir() (files Files) {
 	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
 	for _, d := range list {
@@ -295,20 +311,39 @@ func (files Files) Overite(bytes []byte) error {
 	return nil
 }
 
-func (files Files) Rename(name []string) error {
+func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	for i := range files {
-		newFileName := RenameExist(name[i])
-		if err := os.Rename(files[i].Path, newFileName); err != nil {
-			return fmt.Errorf("Could not create folder")
+	if len(files) == len(name) {
+		for i := range files {
+			newFileName := RenameExist(name[i])
+			if err := os.Rename(files[i].Path, newFileName); err != nil {
+				return fmt.Errorf("Could not create folder")
+			}
+		}
+	} else {
+		if len(files) > 1 {
+			parent, _ := path.Split(files[0].Path)
+			parentDir, _ := MakeFile(parent)
+			parentDir.Touch(".temp")
+			tempFile, _ := MakeFiles([]string{parentDir.Path + "/.temp"})
+			for i := range files {
+				tempFile.Write([]byte(files[i].Name + "\n"))
+			}
+			if err := tempFile.Edit(); err != nil {
+				return err
+			}
+			newNames, _ := readLines(tempFile[0].Path)
+			for i, name := range newNames {
+				os.Rename(files[i].Path, files[i].ParentPath+name)
+			}
 		}
 	}
 	return nil
 }
 
-func (dir File) Bulkname(names Files) error {
+func (file Files) Bulkname(names Files) error {
 	for _, file := range names {
 		print(file.Path)
 	}
@@ -385,16 +420,13 @@ func (files Files) Edit() error {
 }
 
 type Explorer interface {
-	FileIt(path string) (files Files, err error)
 	ListDir() (files Files)
 	Select(files Files, number int) (selected Files)
 	Touch(name string) error
 	Mkdir(name string) error
-}
 
-type Explorers interface {
-	Paste(dir File) error
 	Move(dir File) error
+	Paste(dir File) error
 	Delete() error
 	Write(bytes []byte) error
 	Append(bytes []byte) error
