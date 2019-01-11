@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strconv"
 )
@@ -315,29 +314,35 @@ func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
+	parent := files[0].ParentPath
 	if len(files) == len(name) {
 		for i := range files {
-			newFileName := RenameExist(name[i])
+			newFileName := RenameExist(parent + "/" + name[i])
 			if err := os.Rename(files[i].Path, newFileName); err != nil {
 				return fmt.Errorf("Could not create folder")
 			}
 		}
 	} else {
 		if len(files) > 1 {
-			parent, _ := path.Split(files[0].Path)
 			parentDir, _ := MakeFile(parent)
 			parentDir.Touch(".temp")
 			tempFile, _ := MakeFiles([]string{parentDir.Path + "/.temp"})
 			for i := range files {
-				tempFile.Write([]byte(files[i].Name + "\n"))
+				tempFile.Append([]byte(files[i].Name + "\n"))
 			}
 			if err := tempFile.Edit(); err != nil {
 				return err
 			}
+			fmt.Print("\033[?25l")
 			newNames, _ := readLines(tempFile[0].Path)
+			if len(newNames) != len(files) {
+				tempFile.Delete()
+				return fmt.Errorf("Number of files and names don't match")
+			}
 			for i, name := range newNames {
 				os.Rename(files[i].Path, files[i].ParentPath+name)
 			}
+			tempFile.Delete()
 		}
 	}
 	return nil
