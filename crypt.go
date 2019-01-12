@@ -6,12 +6,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
 	"hash"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 )
 
@@ -142,4 +144,14 @@ func Key(password, salt []byte, iter, keyLen int, h func() hash.Hash) []byte {
 		}
 	}
 	return dk[:keyLen]
+}
+
+func MD5(source string) []byte {
+	data, err := ioutil.ReadFile(source)
+	if err != nil {
+		log.Fatal(err)
+	}
+	h := md5.New()
+	io.WriteString(h, string(data))
+	return h.Sum(nil)
 }
