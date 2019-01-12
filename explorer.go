@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+
+	"github.com/mholt/archiver"
 )
 
 var (
@@ -348,9 +350,29 @@ func (files Files) Rename(name ...string) error {
 	return nil
 }
 
-func (file Files) Bulkname(names Files) error {
-	for _, file := range names {
-		print(file.Path)
+func (files Files) Archive(extension string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	archSlice := []string{}
+	for i := range files {
+		archSlice = append(archSlice, files[i].Path)
+	}
+	newFileName := RenameExist(files[0].Parent + "." + extension)
+	if err := archiver.Archive(archSlice, newFileName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (files Files) Unarchive() error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		if err := archiver.Unarchive(files[i].Path, files[i].Path+"_E"); err != nil {
+			continue
+		}
 	}
 	return nil
 }
