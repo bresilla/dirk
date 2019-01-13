@@ -6,6 +6,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -17,6 +18,8 @@ var (
 	IgnoreSlice = []string{}
 	IgnoreRecur = []string{"node_modules", ".git"}
 	DiskUse     = false
+	wg          sync.WaitGroup
+	filec       = make(chan File)
 )
 
 func byteCountSI(b int64) string {
@@ -299,6 +302,11 @@ func MakeFile(dir string) (file File, err error) {
 	return
 }
 
+func gofile(name string, cfile chan File) {
+	file, _ := MakeFile(name)
+	cfile <- file
+}
+
 func MakeFiles(dir []string) (files Files, err error) {
 	files = Files{}
 	for i := range dir {
@@ -313,11 +321,17 @@ func MakeFiles(dir []string) (files Files, err error) {
 
 func fileList(recurrent bool, dir File) (paths Files, err error) {
 	paths = Files{}
+	var file File
 	if recurrent {
+		defer wg.Wait()
 		err = godirwalk.Walk(dir.Path, &godirwalk.Options{
 			Callback: func(osPathname string, de *godirwalk.Dirent) (err error) {
-				file, _ := MakeFile(osPathname)
-				paths = append(paths, file)
+				wg.Add(1)
+				go func() {
+					file, _ = MakeFile(osPathname)
+					paths = append(paths, file)
+					wg.Done()
+				}()
 				return nil
 			},
 			Unsorted:      true,
@@ -333,9 +347,16 @@ func fileList(recurrent bool, dir File) (paths Files, err error) {
 		sort.Strings(children)
 		for _, child := range children {
 			osPathname := path.Join(dir.Path + "/" + child)
-			file, _ := MakeFile(osPathname)
+			file, _ = MakeFile(osPathname)
 			paths = append(paths, file)
+			//wg.Add(1)
+			//go func() {
+			//	file, _ = MakeFile(osPathname)
+			//	paths = append(paths, file)
+			//	wg.Done()
+			//}()
 		}
+		//wg.Wait()
 	}
 	return
 }
