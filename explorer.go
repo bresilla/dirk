@@ -186,7 +186,7 @@ func (dir File) ListDir() (files Files) {
 
 func (dir File) Select(files Files, number int) (selected Files) {
 	for i := range files {
-		if files[i].Other.Selected {
+		if files[i].Selected {
 			selected = append(selected, files[i])
 		}
 	}

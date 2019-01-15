@@ -50,7 +50,7 @@ func byteCountIEC(b int64) string {
 		float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func gothrough(dir string) (size int64) {
+func getSize(dir string) (size int64) {
 	godirwalk.Walk(dir, &godirwalk.Options{
 		Callback: func(osPathname string, de *godirwalk.Dirent) (err error) {
 			f, err := os.Stat(osPathname)
@@ -200,37 +200,25 @@ type File struct {
 	Name       string
 	Parent     string
 	ParentPath string
-	Ancestors  []string
 	Childrens  []string
+	ChildrenNr int
+	Ancestors  []string
+	AncestorNr int
 	Mime       string
 	Extension  string
 	IsDir      bool
 	Hidden     bool
 	Size       int64
+	SizeIEC    string
 	Mode       os.FileMode
 	BrtTime    time.Time
 	AccTime    time.Time
 	ChgTime    time.Time
-	Other      Other
+	Icon       string
+	Active     bool
+	Selected   bool
+	Ignore     bool
 }
-type Other struct {
-	Children  int
-	Selected  bool
-	Active    bool
-	HumanSize string
-	Deep      int
-	Ignore    bool
-	Icon      string
-}
-
-type Files []File
-
-func (e Files) String(i int) string    { return e[i].Name }
-func (e Files) Len() int               { return len(e) }
-func (e Files) Swap(i, j int)          { e[i], e[j] = e[j], e[i] }
-func (e Files) Less(i, j int) bool     { return e[i].Name[1:] < e[j].Name[1:] }
-func (e Files) SortSize(i, j int) bool { return e[i].Size < e[j].Size }
-func (e Files) SortDate(i, j int) bool { return e[i].BrtTime.Before(e[j].BrtTime) }
 
 func MakeFile(dir string) (file File, err error) {
 	f, err := os.Stat(dir)
@@ -267,35 +255,35 @@ func MakeFile(dir string) (file File, err error) {
 
 	if f.IsDir() {
 		if DiskUse {
-			file.Size = gothrough(dir)
-			file.Other.HumanSize = byteCountIEC(file.Size)
+			file.Size = getSize(dir)
+			file.SizeIEC = byteCountIEC(file.Size)
 		} else {
-			file.Other.HumanSize = "0 B"
+			file.SizeIEC = "0 B"
 		}
 		file.Extension = ""
 		file.Mime = "folder/folder"
-		file.Other.Icon = categoryicons["folder/folder"]
+		file.Icon = categoryicons["folder/folder"]
 		file.Childrens, _ = godirwalk.ReadDirnames(dir, nil)
-		file.Other.Children = len(file.Childrens)
+		file.ChildrenNr = len(file.Childrens)
 	} else {
 		extension := path.Ext(dir)
 		mime, _, _ := mimetype.DetectFile(dir)
-		file.Other.HumanSize = byteCountIEC(f.Size())
+		file.SizeIEC = byteCountIEC(f.Size())
 		file.Extension = extension
 		file.Mime = mime
-		file.Other.Icon = fileicons[extension]
-		if file.Other.Icon == "" {
-			file.Other.Icon = categoryicons["file/default"]
+		file.Icon = fileicons[extension]
+		if file.Icon == "" {
+			file.Icon = categoryicons["file/default"]
 		}
 	}
 	file.Ancestors = strings.Split(dir, "/")
-	file.Other.Deep = len(file.Ancestors)
+	file.AncestorNr = len(file.Ancestors)
 	if string(name[0]) == "." {
 		file.Hidden = true
 	}
 	for _, s := range file.Ancestors {
 		if s != "" && string(s[0]) == "." {
-			file.Other.Ignore = true
+			file.Ignore = true
 			break
 		}
 	}
@@ -305,18 +293,6 @@ func MakeFile(dir string) (file File, err error) {
 func gofile(name string, cfile chan File) {
 	file, _ := MakeFile(name)
 	cfile <- file
-}
-
-func MakeFiles(dir []string) (files Files, err error) {
-	files = Files{}
-	for i := range dir {
-		if file, err := MakeFile(dir[i]); err != nil {
-			return files, err
-		} else {
-			files = append(files, file)
-		}
-	}
-	return files, nil
 }
 
 func fileList(recurrent bool, dir File) (paths Files, err error) {
