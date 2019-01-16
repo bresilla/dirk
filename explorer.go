@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 
 	"github.com/mholt/archiver"
@@ -176,15 +177,17 @@ func readLines(path string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
-func (dir File) ListDir() (files Files) {
+func (dir File) ListDir() Files {
+	files := Files{}
 	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
 	for _, d := range list {
 		files = append(files, d)
 	}
-	return
+	return files
 }
 
-func (dir File) Select(files Files, number int) (selected Files) {
+func (dir File) Select(files Files, number int) Files {
+	selected := Files{}
 	for i := range files {
 		if files[i].Selected {
 			selected = append(selected, files[i])
@@ -193,7 +196,7 @@ func (dir File) Select(files Files, number int) (selected Files) {
 	if len(selected) == 0 {
 		selected = append(selected, files[number])
 	}
-	return
+	return selected
 }
 
 func (dir File) Touch(name string) error {
@@ -446,9 +449,29 @@ func (files Files) Edit() error {
 	return nil
 }
 
+func (files Files) Match(pattern string) Files {
+	matched := Files{}
+	result := FindFrom(pattern, files)
+	for _, r := range result {
+		matched = append(matched, files[r.Index])
+	}
+	return matched
+}
+
+func (files Files) Find(reg *regexp.Regexp, text string) Files {
+	newFinder := Finder{
+		list:  files,
+		Regex: reg,
+		Text:  text,
+	}
+	return newFinder.FindText(text)
+}
+
 type Explorer interface {
-	ListDir() (files Files)
-	Select(files Files, number int) (selected Files)
+	ListDir() Files
+	Select(files Files, number int) Files
+	Match(pattern string) Files
+	Find(reg *regexp.Regexp, text string) Files
 	Touch(name string) error
 	Mkdir(name string) error
 

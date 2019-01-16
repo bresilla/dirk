@@ -217,6 +217,7 @@ var categoryicons = map[string]string{
 
 type File struct {
 	Number     int
+	File       os.FileInfo
 	Path       string
 	Name       string
 	Parent     string
@@ -242,6 +243,20 @@ type File struct {
 	Active     bool
 	Selected   bool
 	Ignore     bool
+	Content
+	Flags
+}
+
+type Content struct {
+	Line     map[int]string
+	Text     map[int]string
+	NumLines int
+}
+
+type Flags struct {
+	Flag1 bool
+	Flag2 bool
+	Flag3 bool
 }
 
 func MakeFile(dir string) (file File, err error) {
@@ -262,6 +277,7 @@ func MakeFile(dir string) (file File, err error) {
 		}
 	}
 	file = File{
+		File:       f,
 		Name:       name,
 		Path:       dir,
 		Parent:     parent,
