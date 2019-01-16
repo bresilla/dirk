@@ -65,6 +65,27 @@ func getSize(dir string) (size int64) {
 	})
 	return
 }
+func elements(dir string) (childs []string) {
+	childs = []string{}
+	if someChildren, err := godirwalk.ReadDirnames(dir, nil); err == nil {
+		for i := range someChildren {
+			childs = append(childs, dir+someChildren[i])
+		}
+	}
+	return
+}
+func ancestor(dir string) (ances []string) {
+	ances = append(ances, "/")
+	joiner := ""
+	for _, el := range strings.Split(dir, "/") {
+		if el == "" {
+			continue
+		}
+		joiner += "/" + el
+		ances = append(ances, joiner)
+	}
+	return
+}
 
 func timespecToTime(ts syscall.Timespec) time.Time {
 	return time.Unix(int64(ts.Sec), int64(ts.Nsec))
@@ -204,6 +225,8 @@ type File struct {
 	ChildrenNr int
 	Ancestors  []string
 	AncestorNr int
+	Siblings   []string
+	SiblingNr  int
 	Mime       string
 	Extension  string
 	IsDir      bool
@@ -215,6 +238,7 @@ type File struct {
 	AccTime    time.Time
 	ChgTime    time.Time
 	Icon       string
+	TotalNr    int
 	Active     bool
 	Selected   bool
 	Ignore     bool
@@ -227,22 +251,19 @@ func MakeFile(dir string) (file File, err error) {
 	}
 	osStat := f.Sys().(*syscall.Stat_t)
 
-	parent := "/"
-	parentPath := "/"
-	name := "/"
+	parent, parentPath, name := "/", "/", "/"
 	if dir != "/" {
 		dir = path.Clean(dir)
 		parentPath, name = path.Split(dir)
 		parent = strings.TrimRight(parentPath, "/")
 		_, parent = path.Split(parent)
 		if parent == "" {
-			parent = "/"
-			parentPath = "/"
+			parent, parentPath = "/", "/"
 		}
 	}
 	file = File{
-		Path:       dir,
 		Name:       name,
+		Path:       dir,
 		Parent:     parent,
 		ParentPath: parentPath,
 		Size:       f.Size(),
@@ -263,7 +284,7 @@ func MakeFile(dir string) (file File, err error) {
 		file.Extension = ""
 		file.Mime = "folder/folder"
 		file.Icon = categoryicons["folder/folder"]
-		file.Childrens, _ = godirwalk.ReadDirnames(dir, nil)
+		file.Childrens = elements(dir)
 		file.ChildrenNr = len(file.Childrens)
 	} else {
 		extension := path.Ext(dir)
@@ -276,8 +297,11 @@ func MakeFile(dir string) (file File, err error) {
 			file.Icon = categoryicons["file/default"]
 		}
 	}
-	file.Ancestors = strings.Split(dir, "/")
+	file.Siblings = elements(parentPath)
+	file.SiblingNr = len(file.Siblings)
+	file.Ancestors = ancestor(parentPath)
 	file.AncestorNr = len(file.Ancestors)
+
 	if string(name[0]) == "." {
 		file.Hidden = true
 	}
@@ -384,6 +408,7 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 	}
 	for i, _ := range list {
 		list[i].Number = i
+		list[i].TotalNr = len(list)
 	}
 	return
 }
