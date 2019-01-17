@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 
 	"github.com/mholt/archiver"
@@ -458,20 +457,30 @@ func (files Files) Match(pattern string) Files {
 	return matched
 }
 
-func (files Files) Find(reg *regexp.Regexp, text string) Files {
-	newFinder := Finder{
-		list:  files,
-		Regex: reg,
-		Text:  text,
+func (files Files) Find(finder Finder) Files {
+	matched := Files{}
+	if len(finder.Text) == 0 && finder.Regex == nil {
+		return files
 	}
-	return newFinder.FindText(text)
+	for i := range files {
+		if files[i].Mime[:4] != "text" {
+			continue
+		}
+		readAndFind(&files[i], finder)
+	}
+	for i := range files {
+		if files[i].Flags.Flag1 {
+			matched = append(matched, files[i])
+		}
+	}
+	return matched
 }
 
 type Explorer interface {
 	ListDir() Files
 	Select(files Files, number int) Files
 	Match(pattern string) Files
-	Find(reg *regexp.Regexp, text string) Files
+	Find(newFinder Finder) Files
 	Touch(name string) error
 	Mkdir(name string) error
 

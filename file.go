@@ -218,6 +218,7 @@ var categoryicons = map[string]string{
 type File struct {
 	Number     int
 	File       os.FileInfo
+	Mode       os.FileMode
 	Path       string
 	Name       string
 	Parent     string
@@ -234,7 +235,6 @@ type File struct {
 	Hidden     bool
 	Size       int64
 	SizeIEC    string
-	Mode       os.FileMode
 	BrtTime    time.Time
 	AccTime    time.Time
 	ChgTime    time.Time
@@ -257,6 +257,8 @@ type Flags struct {
 	Flag1 bool
 	Flag2 bool
 	Flag3 bool
+	Test  string
+	Error error
 }
 
 func MakeFile(dir string) (file File, err error) {
@@ -327,6 +329,8 @@ func MakeFile(dir string) (file File, err error) {
 			break
 		}
 	}
+	file.Content.Text = make(map[int]string)
+	file.Content.Line = make(map[int]string)
 	return
 }
 
