@@ -107,7 +107,7 @@ func MakeFile(dir string) (file File, err error) {
 		return
 	}
 
-	parent, parentPath, _ := parentInfo(dir)
+	parent, parentPath := parentInfo(dir)
 	file = File{
 		Name:       dirent.name,
 		Sort:       dirent.name,
@@ -365,11 +365,11 @@ func basename(paths []string) (names []string) {
 	return
 }
 
-func parentInfo(dir string) (parent, parentPath, name string) {
-	parent, parentPath, name = "/", "/", "/"
+func parentInfo(dir string) (parent, parentPath string) {
+	parent, parentPath = "/", "/"
 	if dir != "/" {
 		dir = path.Clean(dir)
-		parentPath, name = path.Split(dir)
+		parentPath, _ = path.Split(dir)
 		parent = strings.TrimRight(parentPath, "/")
 		_, parent = path.Split(parent)
 		if parent == "" {
