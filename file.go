@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bresilla/godirwalk"
 	"github.com/gabriel-vasile/mimetype"
 )
 
@@ -51,8 +50,8 @@ func byteCountIEC(b int64) string {
 }
 
 func getSize(dir string) (size int64) {
-	godirwalk.Walk(dir, &godirwalk.Options{
-		Callback: func(osPathname string, de *godirwalk.Dirent) (err error) {
+	Walk(dir, &Options{
+		Callback: func(osPathname string, de *Dirent) (err error) {
 			f, err := os.Stat(osPathname)
 			if err != nil {
 				return
@@ -67,7 +66,7 @@ func getSize(dir string) (size int64) {
 }
 func elements(dir string) (childs []string) {
 	childs = []string{}
-	if someChildren, err := godirwalk.ReadDirnames(dir, nil); err == nil {
+	if someChildren, err := ReadDirnames(dir, nil); err == nil {
 		for i := range someChildren {
 			childs = append(childs, dir+someChildren[i])
 		}
@@ -334,51 +333,46 @@ func MakeFile(dir string) (file File, err error) {
 	return
 }
 
-func gofile(name string, cfile chan File) {
-	file, _ := MakeFile(name)
-	cfile <- file
-}
-
 func fileList(recurrent bool, dir File) (paths Files, err error) {
-	paths = Files{}
+	testPath := cFiles{}
 	var file File
 	if recurrent {
-		defer wg.Wait()
-		err = godirwalk.Walk(dir.Path, &godirwalk.Options{
-			Callback: func(osPathname string, de *godirwalk.Dirent) (err error) {
+		err = Walk(dir.Path, &Options{
+			Callback: func(osPathname string, de *Dirent) (err error) {
 				wg.Add(1)
 				go func() {
 					file, _ = MakeFile(osPathname)
-					paths = append(paths, file)
+					testPath.Append(file)
+					//paths = append(paths, file)
 					wg.Done()
 				}()
 				return nil
 			},
 			Unsorted:      true,
-			NoHidden:      true,
+			NoHidden:      IncHidden,
 			Ignore:        IgnoreRecur,
 			ScratchBuffer: make([]byte, 64*1024),
 		})
 	} else {
-		children, err := godirwalk.ReadDirnames(dir.Path, nil)
+		children, err := ReadDirnames(dir.Path, nil)
 		if err != nil {
 			return paths, err
 		}
 		sort.Strings(children)
 		for _, child := range children {
 			osPathname := path.Join(dir.Path + "/" + child)
-			file, _ = MakeFile(osPathname)
-			paths = append(paths, file)
-			//wg.Add(1)
-			//go func() {
-			//	file, _ = MakeFile(osPathname)
-			//	paths = append(paths, file)
-			//	wg.Done()
-			//}()
+			//file, _ = MakeFile(osPathname)
+			//paths = append(paths, file)
+			wg.Add(1)
+			go func() {
+				file, _ = MakeFile(osPathname)
+				testPath.Append(file)
+				wg.Done()
+			}()
 		}
-		//wg.Wait()
 	}
-	return
+	wg.Wait()
+	return testPath.items, nil
 }
 
 func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list Files) {
@@ -387,6 +381,7 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 	hidden := Files{}
 	ignore := Files{}
 	paths, _ := fileList(recurrent, dir)
+	sort.Sort(paths)
 	for _, f := range paths {
 		if f.IsDir {
 			folder = append(folder, f)
@@ -452,4 +447,15 @@ func MakeFiles(path []string) (files Files, err error) {
 		}
 	}
 	return files, nil
+}
+
+type cFiles struct {
+	sync.RWMutex
+	items Files
+}
+
+func (cf *cFiles) Append(item File) {
+	cf.Lock()
+	defer cf.Unlock()
+	cf.items = append(cf.items, item)
 }
