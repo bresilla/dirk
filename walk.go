@@ -12,33 +12,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Dirent struct {
-	name     string
-	modeType os.FileMode
-}
-
-func NewDirent(osPathname string) (*Dirent, error) {
-	fi, err := os.Lstat(osPathname)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot lstat")
-	}
-	return &Dirent{
-		name:     filepath.Base(osPathname),
-		modeType: fi.Mode() & os.ModeType,
-	}, nil
-}
-func (de Dirent) Name() string          { return de.name }
-func (de Dirent) ModeType() os.FileMode { return de.modeType }
-func (de Dirent) IsDir() bool           { return de.modeType&os.ModeDir != 0 }
-func (de Dirent) IsRegular() bool       { return de.modeType&os.ModeType == 0 }
-func (de Dirent) IsSymlink() bool       { return de.modeType&os.ModeSymlink != 0 }
-
-type Dirents []*Dirent
-
-func (l Dirents) Len() int           { return len(l) }
-func (l Dirents) Less(i, j int) bool { return l[i].name < l[j].name }
-func (l Dirents) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
-
 // DefaultScratchBufferSize specifies the size of the scratch buffer that will
 // be allocated by Walk, ReadDirents, or ReadDirnames when a scratch buffer is
 // not provided or the scratch buffer that is provided is smaller than
@@ -149,8 +122,8 @@ func Walk(pathname string, options *Options) error {
 		return errors.Errorf("cannot Walk non-directory: %s", pathname)
 	}
 	dirent := &Dirent{
-		name:     filepath.Base(pathname),
-		modeType: mode & os.ModeType,
+		name: filepath.Base(pathname),
+		mode: mode & os.ModeType,
 	}
 	if options.ErrorCallback == nil {
 		options.ErrorCallback = func(_ string, _ error) ErrorAction { return Halt }
@@ -206,7 +179,7 @@ func walk(osPathname string, dirent *Dirent, options *Options) error {
 				}
 				return err
 			}
-			dirent.modeType = fi.Mode() & os.ModeType
+			dirent.mode = fi.Mode() & os.ModeType
 		}
 	}
 
@@ -269,7 +242,7 @@ func walk(osPathname string, dirent *Dirent, options *Options) error {
 						}
 						return err
 					}
-					deChild.modeType = fi.Mode() & os.ModeType
+					deChild.mode = fi.Mode() & os.ModeType
 				}
 			}
 			if !deChild.IsDir() {
@@ -377,7 +350,7 @@ func readdirents(osDirname string, scratchBuffer []byte) (Dirents, error) {
 				mode = fi.Mode() & os.ModeType
 			}
 
-			entries = append(entries, &Dirent{name: osChildname, modeType: mode})
+			entries = append(entries, &Dirent{name: osChildname, mode: mode})
 		}
 	}
 	if err = dh.Close(); err != nil {

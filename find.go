@@ -71,15 +71,10 @@ in descending order of match quality. Match quality
 is determined by a set of bonus and penalty rules.
 
 The following types of matches apply a bonus:
-
 * The first character in the pattern matches the first character in the match string.
-
 * The matched character is camel cased.
-
 * The matched character follows a separator such as an underscore character.
-
 * The matched character is adjacent to a previous match.
-
 Penalties are applied for every character in the search string that wasn't matched and all leading
 characters upto the first match.
 */
@@ -262,17 +257,13 @@ func readAndFind(file *File, finder Finder) {
 		if finder.Regex != nil {
 			words := finder.Regex.FindAllString(line, -1)
 			if len(words) > 0 {
-				file.Flags.Flag1 = true
-				file.Content.Line[numLine] = line
-				file.Content.Text[numLine] = finder.Text
+				file.MapLine[numLine] = line
 			}
 		} else if len(finder.Text) != 0 {
 			if strings.Contains(line, finder.Text) {
-				file.Flags.Flag1 = true
-				file.Content.Line[numLine] = line
-				file.Content.Text[numLine] = finder.Text
+				file.MapLine[numLine] = line
 			}
 		}
 	}
-	file.Content.NumLines = numLine
+	file.NumLines = numLine
 }

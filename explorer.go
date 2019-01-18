@@ -330,7 +330,7 @@ func (files Files) Rename(name ...string) error {
 		if len(files) > 1 {
 			parentDir, _ := MakeFile(parent)
 			parentDir.Touch(".temp")
-			tempFile, _ := MakeFiles([]string{parentDir.Path + "/.temp"})
+			tempFile, _ := MakeFiles(parentDir.Path + "/.temp")
 			for i := range files {
 				tempFile.Append([]byte(files[i].Name + "\n"))
 			}
@@ -466,10 +466,10 @@ func (files Files) Find(finder Finder) Files {
 		if files[i].Mime[:4] != "text" {
 			continue
 		}
-		readAndFind(&files[i], finder)
+		readAndFind(files[i], finder)
 	}
 	for i := range files {
-		if files[i].Flags.Flag1 {
+		if len(files[i].MapLine) > 0 {
 			matched = append(matched, files[i])
 		}
 	}
