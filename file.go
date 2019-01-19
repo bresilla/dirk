@@ -11,12 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/pkg/errors"
 )
 
 var (
-	IgnoreSlice = []string{}
+	IgnoreSlice = []string{".git"}
 	IgnoreRecur = []string{"node_modules", ".git"}
 	DiskUse     = false
 	wg          sync.WaitGroup
@@ -31,13 +30,10 @@ type Dirent struct {
 	stat *syscall.Stat_t
 }
 
-func (de Dirent) Name() string          { return de.name }
-func (de Dirent) Path() string          { return de.path }
-func (de Dirent) ModeType() os.FileMode { return de.mode }
-func (de Dirent) IsDir() bool           { return de.mode&os.ModeDir != 0 }
-func (de Dirent) IsRegular() bool       { return de.mode&os.ModeType == 0 }
-func (de Dirent) IsSymlink() bool       { return de.mode&os.ModeSymlink != 0 }
-func (de Dirent) IsHidden() bool        { return string(de.name[0]) == "." }
+func (de Dirent) IsDir() bool     { return de.mode&os.ModeDir != 0 }
+func (de Dirent) IsRegular() bool { return de.mode&os.ModeType == 0 }
+func (de Dirent) IsSymlink() bool { return de.mode&os.ModeSymlink != 0 }
+func (de Dirent) IsHidden() bool  { return string(de.name[0]) == "." }
 
 func MakeDirent(osPathname string) (*Dirent, error) {
 	f, err := os.Stat(osPathname)
@@ -48,9 +44,9 @@ func MakeDirent(osPathname string) (*Dirent, error) {
 	return &Dirent{
 		name: filepath.Base(osPathname),
 		path: osPathname,
+		file: f,
 		mode: f.Mode(),
 		stat: fstat,
-		file: f,
 	}, nil
 }
 
@@ -61,11 +57,10 @@ func (l Dirents) Less(i, j int) bool { return l[i].name < l[j].name }
 func (l Dirents) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
 type File struct {
-	Dirent
+	*Dirent
 	Mode os.FileMode
 	Path string
 	Name string
-	Sort string
 
 	Parent        string
 	ParentPath    string
@@ -79,14 +74,13 @@ type File struct {
 	SiblingPaths  []string
 	SiblingNr     int
 
-	Mime      string
-	Extension string
-	Icon      string
+	Mime string
+	Exte string
+	Icon string
 
-	IsDir   bool
-	Hidden  bool
-	Size    int64
-	SizeIEC string
+	IsDir  bool
+	Hidden bool
+	Size   int64
 
 	BrtTime time.Time
 	AccTime time.Time
@@ -96,6 +90,7 @@ type File struct {
 	Active   bool
 	Selected bool
 	Ignore   bool
+	Nick     string
 
 	NumLines int
 	MapLine  map[int]string
@@ -110,13 +105,13 @@ func MakeFile(dir string) (file File, err error) {
 	parent, parentPath := parentInfo(dir)
 	file = File{
 		Name:       dirent.name,
-		Sort:       dirent.name,
+		Nick:       dirent.name,
 		Path:       dirent.path,
 		Parent:     parent,
 		ParentPath: parentPath,
 		Size:       dirent.file.Size(),
 		Mode:       dirent.file.Mode(),
-		IsDir:      dirent.file.IsDir(),
+		IsDir:      dirent.IsDir(),
 		Hidden:     dirent.IsHidden(),
 		BrtTime:    timespecToTime(dirent.stat.Mtim),
 		AccTime:    timespecToTime(dirent.stat.Atim),
@@ -124,13 +119,8 @@ func MakeFile(dir string) (file File, err error) {
 	}
 
 	if dirent.file.IsDir() {
-		if DiskUse {
-			file.Size = getSize(dir)
-			file.SizeIEC = byteCountIEC(file.Size)
-		} else {
-			file.SizeIEC = "0 B"
-		}
-		file.Extension = ""
+		file.Size = getSize(dirent, DiskUse)
+		file.Exte = "."
 		file.Mime = "folder/folder"
 		file.Icon = categoryicons["folder/folder"]
 		file.ChildrenPaths = elements(dir)
@@ -138,9 +128,8 @@ func MakeFile(dir string) (file File, err error) {
 		file.ChildrenNr = len(file.Childrens)
 	} else {
 		extension := path.Ext(dir)
-		mime, _, _ := mimetype.DetectFile(dir)
-		file.SizeIEC = byteCountIEC(dirent.file.Size())
-		file.Extension = extension
+		mime, _, _ := DetectFile(dir)
+		file.Exte = extension
 		file.Mime = mime
 		file.Icon = fileicons[extension]
 		if file.Icon == "" {
@@ -153,23 +142,30 @@ func MakeFile(dir string) (file File, err error) {
 	file.AncestorPaths = ancestor(file.ParentPath)
 	file.Ancestors = basename(file.AncestorPaths)
 	file.AncestorNr = len(file.Ancestors)
-
-	for _, s := range file.Ancestors {
-		if s != "" && string(s[0]) == "." {
-			file.Ignore = true
-			break
-		}
-	}
 	file.MapLine = make(map[int]string)
 	return
 }
 
+func (f File) GetSize() string { return byteCountIEC(f.Size) }
+
 type Files []*File
+
+func MakeFiles(path ...string) (files Files, err error) {
+	files = Files{}
+	for i := range path {
+		if file, err := MakeFile(path[i]); err != nil {
+			return files, err
+		} else {
+			files = append(files, &file)
+		}
+	}
+	return files, nil
+}
 
 func (e Files) String(i int) string    { return e[i].Name }
 func (e Files) Len() int               { return len(e) }
 func (e Files) Swap(i, j int)          { e[i], e[j] = e[j], e[i] }
-func (e Files) Less(i, j int) bool     { return e[i].Sort[0:] < e[j].Sort[0:] }
+func (e Files) Less(i, j int) bool     { return e[i].Nick[0:] < e[j].Nick[0:] }
 func (e Files) SortSize(i, j int) bool { return e[i].Size < e[j].Size }
 func (e Files) SortDate(i, j int) bool { return e[i].BrtTime.Before(e[j].BrtTime) }
 
@@ -182,18 +178,6 @@ func (e *Element) Add(item File) {
 	e.Lock()
 	defer e.Unlock()
 	e.files = append(e.files, &item)
-}
-
-func MakeFiles(path ...string) (files Files, err error) {
-	files = Files{}
-	for i := range path {
-		if file, err := MakeFile(path[i]); err != nil {
-			return files, err
-		} else {
-			files = append(files, &file)
-		}
-	}
-	return files, nil
 }
 
 func fileList(recurrent bool, dir File) (paths Files, err error) {
@@ -238,56 +222,43 @@ func fileList(recurrent bool, dir File) (paths Files, err error) {
 }
 
 func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list Files) {
-	files := Files{}
-	folder := Files{}
-	hidden := Files{}
-	ignore := Files{}
+	files, folder := Files{}, Files{}
+
 	paths, _ := fileList(recurrent, dir)
 	for _, f := range paths {
-		if Recurrent {
-			f.Sort = f.Path
+		for i := range IgnoreSlice {
+			if f.Name == IgnoreSlice[i] {
+				goto Exit
+			}
 		}
 		if f.IsDir {
-			folder = append(folder, f)
+			if !f.Hidden || incHidden {
+				folder = append(folder, f)
+			}
 		} else {
-			files = append(files, f)
+			if !f.Hidden || incHidden {
+				if Recurrent {
+					f.Nick = f.Path
+				}
+				files = append(files, f)
+			}
 		}
+	Exit:
 	}
 	if incFolder && !Recurrent {
 		sort.Sort(folder)
 		for _, d := range folder {
-			hidden = append(hidden, d)
+			list = append(list, d)
 		}
 	}
 	if incFiles {
 		sort.Sort(files)
 		for _, f := range files {
-			hidden = append(hidden, f)
+			list = append(list, f)
 		}
 	}
-	if incHidden {
-		ignore = hidden
-	} else {
-		for _, f := range hidden {
-			if !f.Hidden {
-				ignore = append(ignore, f)
-			}
-		}
-	}
-	if len(IgnoreSlice) > 0 {
-		for _, f := range ignore {
-			for _, s := range IgnoreSlice {
-				if f.Name == s {
-					break
-				}
-				list = append(list, f)
-				break
-			}
-		}
-	} else {
-		list = ignore
-	}
-	for i, _ := range list {
+
+	for i := range list {
 		list[i].Number = i
 	}
 	return
@@ -321,19 +292,24 @@ func byteCountIEC(b int64) string {
 		float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-func getSize(dir string) (size int64) {
-	Walk(dir, &Options{
-		Callback: func(osPathname string, de *Dirent) (err error) {
-			f, err := os.Stat(osPathname)
-			if err != nil {
-				return
-			}
-			size += f.Size()
-			return nil
-		},
-		Unsorted:      true,
-		ScratchBuffer: make([]byte, 64*1024),
-	})
+func getSize(dirent *Dirent, dumode bool) (size int64) {
+	dir := dirent.path
+	if dumode {
+		Walk(dir, &Options{
+			Callback: func(osPathname string, de *Dirent) (err error) {
+				f, err := os.Stat(osPathname)
+				if err != nil {
+					return
+				}
+				size += f.Size()
+				return nil
+			},
+			Unsorted:      true,
+			ScratchBuffer: make([]byte, 64*1024),
+		})
+	} else {
+		size = dirent.file.Size()
+	}
 	return
 }
 func elements(dir string) (childs []string) {

@@ -271,9 +271,8 @@ func (files Files) Write(bytes []byte) error {
 		} else if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
 			if _, err := newFile.Write(bytes); err != nil {
 				return fmt.Errorf("Could not write file")
-			} else {
-				newFile.Close()
 			}
+			newFile.Close()
 		}
 	}
 	return nil
@@ -288,9 +287,8 @@ func (files Files) Append(bytes []byte) error {
 			if newFile, err := os.OpenFile(files[i].Path, os.O_RDWR|os.O_APPEND, 0777); err == nil {
 				if _, err := newFile.Write(bytes); err != nil {
 					return fmt.Errorf("Could not write file")
-				} else {
-					newFile.Close()
 				}
+				newFile.Close()
 			}
 		} else {
 			if err := files.Write(bytes); err != nil {

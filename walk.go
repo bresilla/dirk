@@ -1,3 +1,4 @@
+//source https://github.com/karrick/godirwalk
 package dirk
 
 import (
