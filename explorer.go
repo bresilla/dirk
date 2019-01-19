@@ -10,15 +10,18 @@ import (
 	"path/filepath"
 	"strconv"
 
+	t "github.com/bresilla/shko/term"
 	"github.com/mholt/archiver"
 )
 
 var (
-	IncFolder = true
-	IncFiles  = true
-	IncHidden = false
-	Recurrent = false
-	cmd       *exec.Cmd
+	IncFolder   = true
+	IncFiles    = true
+	IncHidden   = false
+	Recurrent   = false
+	DiskUse     = false
+	IgnoreSlice = []string{".git"}
+	IgnoreRecur = []string{"node_modules", ".git"}
 )
 
 func open(input string) *exec.Cmd {
@@ -29,7 +32,7 @@ func openWith(input string, appName string) *exec.Cmd {
 	return exec.Command(appName, input)
 }
 
-func RenameExist(name string) string {
+func renameExist(name string) string {
 	if _, err := os.Stat(name); err == nil {
 		i := 1
 		for {
@@ -51,7 +54,7 @@ func cpFile(src, dst string) error {
 	}
 	var out *os.File
 	defer in.Close()
-	dst = RenameExist(dst)
+	dst = renameExist(dst)
 	out, err = os.Create(dst)
 	if err != nil {
 		return err
@@ -86,7 +89,7 @@ func cpDir(src, dst string) error {
 	if !si.IsDir() {
 		return fmt.Errorf("source is not a directory")
 	}
-	dst = RenameExist(dst)
+	dst = renameExist(dst)
 	err = os.MkdirAll(dst, si.Mode())
 	if err != nil {
 		return err
@@ -129,7 +132,7 @@ func cpAny(src, dst string) error {
 				return fmt.Errorf("directory is itself: %s", dst)
 			}
 			dst += "/" + filepath.Base(src)
-			dst = RenameExist(dst)
+			dst = renameExist(dst)
 			return cpDir(src, dst)
 		}
 		return cpDir(src, dst)
@@ -176,6 +179,18 @@ func readLines(path string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
+func unique(intSlice []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range intSlice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
+}
+
 func (dir File) ListDir() Files {
 	files := Files{}
 	list := chooseFile(IncFolder, IncFiles, IncHidden, Recurrent, dir)
@@ -185,37 +200,45 @@ func (dir File) ListDir() Files {
 	return files
 }
 
-func (dir File) Select(files Files, number int) Files {
+func (dir File) Select(files Files) Files {
 	selected := Files{}
 	for i := range files {
-		if files[i].Selected {
+		if files[i].Selected || files[i].Active {
 			selected = append(selected, files[i])
 		}
-	}
-	if len(selected) == 0 {
-		selected = append(selected, files[number])
 	}
 	return selected
 }
 
-func (dir File) Touch(name string) error {
-	newFileName := dir.Path + "/" + name
-	newFileName = RenameExist(newFileName)
-	if newFile, err := os.Create(newFileName); err != nil {
-		return fmt.Errorf("Could not create file")
-	} else {
-		newFile.Close()
+func (dir File) Touch(names ...string) (Files, error) {
+	files := Files{}
+	for i := range names {
+		newFileName := dir.Path + "/" + names[i]
+		newFileName = renameExist(newFileName)
+		if newFile, err := os.Create(newFileName); err != nil {
+			return files, fmt.Errorf("Could not create file")
+		} else {
+			theFile, _ := MakeFile(newFileName)
+			files = append(files, &theFile)
+			newFile.Close()
+		}
 	}
-	return nil
+	return files, nil
 }
 
-func (dir File) Mkdir(name string) error {
-	newFileName := dir.Path + "/" + name
-	newFileName = RenameExist(newFileName)
-	if err := os.MkdirAll(newFileName, 0777); err != nil {
-		return fmt.Errorf("Could not create folder")
+func (dir File) Mkdir(names ...string) (Files, error) {
+	files := Files{}
+	for i := range names {
+		newFileName := dir.Path + "/" + names[i]
+		newFileName = renameExist(newFileName)
+		if err := os.MkdirAll(newFileName, 0777); err != nil {
+			return files, fmt.Errorf("Could not create folder")
+		} else {
+			theFile, _ := MakeFile(newFileName)
+			files = append(files, &theFile)
+		}
 	}
-	return nil
+	return files, nil
 }
 
 func (files Files) Paste(dir File) error {
@@ -265,7 +288,7 @@ func (files Files) Write(bytes []byte) error {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
-		newFileName := RenameExist(files[i].Path)
+		newFileName := renameExist(files[i].Path)
 		if _, err := os.Create(newFileName); err != nil {
 			return fmt.Errorf("Could not create file")
 		} else if newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_APPEND, 0777); err == nil {
@@ -312,6 +335,41 @@ func (files Files) Overite(bytes []byte) error {
 	return nil
 }
 
+func (files Files) Union(name string) error {
+	isMixed := false
+	if len(files) < 1 {
+		return fmt.Errorf("Not enough files to join")
+	}
+	for i := range files {
+		if files[i].IsDir {
+			isMixed = true
+		}
+	}
+	virtDir, _ := MakeFile(files[0].ParentPath)
+	if !isMixed {
+		toWrite, _ := virtDir.Touch(name)
+		for i := range files {
+			toWrite.Append([]byte(strconv.Itoa(i)))
+		}
+		t.PrintWait("file")
+	} else {
+		toPlace, _ := virtDir.Mkdir(name)
+		files.Paste(*toPlace[0])
+	}
+	return nil
+}
+
+func (files Files) Indent(name string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	virtDir, _ := MakeFile(files[0].ParentPath)
+	toPlace, _ := virtDir.Mkdir(name)
+	files.Paste(*toPlace[0])
+	files.Delete()
+	return nil
+}
+
 func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
@@ -319,7 +377,7 @@ func (files Files) Rename(name ...string) error {
 	parent := files[0].ParentPath
 	if len(files) == len(name) {
 		for i := range files {
-			newFileName := RenameExist(parent + "/" + name[i])
+			newFileName := renameExist(parent + "/" + name[i])
 			if err := os.Rename(files[i].Path, newFileName); err != nil {
 				return fmt.Errorf("Could not create folder")
 			}
@@ -342,7 +400,8 @@ func (files Files) Rename(name ...string) error {
 				return fmt.Errorf("Number of files and names don't match")
 			}
 			for i, name := range newNames {
-				os.Rename(files[i].Path, files[i].ParentPath+name)
+				newName := renameExist(name)
+				os.Rename(files[i].Path, files[i].ParentPath+newName)
 			}
 			tempFile.Delete()
 		}
@@ -358,7 +417,7 @@ func (files Files) Archive(extension string) error {
 	for i := range files {
 		archSlice = append(archSlice, files[i].Path)
 	}
-	newFileName := RenameExist(files[0].Parent + "." + extension)
+	newFileName := renameExist(files[0].Parent + "." + extension)
 	if err := archiver.Archive(archSlice, newFileName); err != nil {
 		return err
 	}
@@ -426,6 +485,7 @@ func (files Files) StartWith(name string) error {
 }
 
 func (files Files) Edit() error {
+	var cmd *exec.Cmd
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
@@ -472,26 +532,4 @@ func (files Files) Find(finder Finder) Files {
 		}
 	}
 	return matched
-}
-
-type Explorer interface {
-	ListDir() Files
-	Select(files Files, number int) Files
-	Match(pattern string) Files
-	Find(newFinder Finder) Files
-	Touch(name string) error
-	Mkdir(name string) error
-
-	Move(dir File) error
-	Paste(dir File) error
-	Delete() error
-	Write(bytes []byte) error
-	Append(bytes []byte) error
-	Overite(bytes []byte) error
-	Rename(name []string) error
-	Run() error
-	RunWith(name string) error
-	Start() error
-	StartWith(name string) error
-	Edit() error
 }

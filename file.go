@@ -15,11 +15,8 @@ import (
 )
 
 var (
-	IgnoreSlice = []string{".git"}
-	IgnoreRecur = []string{"node_modules", ".git"}
-	DiskUse     = false
-	wg          sync.WaitGroup
-	channel     = make(chan File)
+	wg      sync.WaitGroup
+	channel = make(chan File)
 )
 
 type Dirent struct {
@@ -312,6 +309,7 @@ func getSize(dirent *Dirent, dumode bool) (size int64) {
 	}
 	return
 }
+
 func elements(dir string) (childs []string) {
 	childs = []string{}
 	if someChildren, err := ReadDirnames(dir, nil); err == nil {
@@ -321,6 +319,7 @@ func elements(dir string) (childs []string) {
 	}
 	return
 }
+
 func ancestor(dir string) (ances []string) {
 	ances = append(ances, "/")
 	joiner := ""
