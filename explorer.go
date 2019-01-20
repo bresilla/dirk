@@ -241,13 +241,13 @@ func (dir File) Mkdir(names ...string) (Files, error) {
 	return files, nil
 }
 
-func (files Files) Paste(dir File) error {
+func (files Files) Paste(destin File) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
 		if _, err := os.Stat(files[i].Path); !os.IsNotExist(err) {
-			if err := cpAny(files[i].Path, dir.Path); err != nil {
+			if err := cpAny(files[i].Path, destin.Path); err != nil {
 				return fmt.Errorf("Could not copy file!")
 			}
 		}
@@ -255,13 +255,13 @@ func (files Files) Paste(dir File) error {
 	return nil
 }
 
-func (files Files) Move(dir File) error {
+func (files Files) Move(destin File) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
 		if _, err := os.Stat(files[i].Path); !os.IsNotExist(err) {
-			if err := cpAny(files[i].Path, dir.Path); err != nil {
+			if err := cpAny(files[i].Path, destin.Path); err != nil {
 				return fmt.Errorf("Could not copy file")
 			} else if err := os.RemoveAll(files[i].Path); err != nil {
 				return fmt.Errorf("Could not delete file")
@@ -281,6 +281,42 @@ func (files Files) Delete() error {
 		}
 	}
 	return nil
+}
+
+func (files Files) Read2B() ([][]byte, error) {
+	fileArray := [][]byte{}
+	if len(files) == 0 {
+		return fileArray, fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		jointMem, err := ioutil.ReadFile(files[i].Path)
+		if err != nil {
+			return fileArray, err
+		}
+		fileArray = append(fileArray, jointMem)
+	}
+	return fileArray, nil
+}
+
+func (files Files) Read2S() ([][]string, error) {
+	fileArray := [][]string{}
+	if len(files) == 0 {
+		return fileArray, fmt.Errorf("No file selected")
+	}
+	for i := range files {
+		file, err := os.Open(files[i].Path)
+		if err != nil {
+			return fileArray, err
+		}
+		defer file.Close()
+		var lines []string
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			lines = append(lines, scanner.Text())
+		}
+		fileArray = append(fileArray, lines)
+	}
+	return fileArray, nil
 }
 
 func (files Files) Write(bytes []byte) error {
@@ -385,8 +421,7 @@ func (files Files) Rename(name ...string) error {
 	} else {
 		if len(files) > 1 {
 			parentDir, _ := MakeFile(parent)
-			parentDir.Touch(".temp")
-			tempFile, _ := MakeFiles(parentDir.Path + "/.temp")
+			tempFile, _ := parentDir.Touch(".temp")
 			for i := range files {
 				tempFile.Append([]byte(files[i].Name + "\n"))
 			}
@@ -506,11 +541,14 @@ func (files Files) Edit() error {
 	return nil
 }
 
-func (files Files) Match(pattern string) Files {
+func (files Files) Match(finder Finder) Files {
 	matched := Files{}
-	result := FindFrom(pattern, files)
-	for _, r := range result {
-		matched = append(matched, files[r.Index])
+	if finder.Regex == nil {
+		result := FindFrom(finder.Text, files)
+		for _, r := range result {
+			matched = append(matched, files[r.Index])
+		}
+	} else {
 	}
 	return matched
 }

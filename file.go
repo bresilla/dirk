@@ -193,7 +193,7 @@ func fileList(recurrent bool, dir File) (paths Files, err error) {
 				return nil
 			},
 			Unsorted:      true,
-			NoHidden:      true,
+			NoHidden:      !IncHidden,
 			Ignore:        IgnoreRecur,
 			ScratchBuffer: make([]byte, 64*1024),
 		})
@@ -244,17 +244,12 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 	}
 	if incFolder && !Recurrent {
 		sort.Sort(folder)
-		for _, d := range folder {
-			list = append(list, d)
-		}
+		list = append(list, folder...)
 	}
 	if incFiles {
 		sort.Sort(files)
-		for _, f := range files {
-			list = append(list, f)
-		}
+		list = append(list, files...)
 	}
-
 	for i := range list {
 		list[i].Number = i
 	}

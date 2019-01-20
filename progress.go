@@ -69,7 +69,7 @@ type Spinner struct {
 }
 
 // New provides a pointer to an instance of Spinner with the supplied options
-func New(cs []string, d time.Duration, i int) *Spinner {
+func NewSpinner(cs []string, d time.Duration, i int) *Spinner {
 	s := &Spinner{
 		Delay:    d,
 		Percent:  i,
