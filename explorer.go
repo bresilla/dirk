@@ -610,11 +610,11 @@ func (files Files) Union(name string) error {
 		return fmt.Errorf("Not enough files to join")
 	}
 	for i := range files {
-		if files[i].IsDir {
+		if files[i].IsDir() {
 			isMixed = true
 		}
 	}
-	virtDir, _ := MakeFile(files[0].ParentPath)
+	virtDir, _ := MakeFile(files[0].ParentPath())
 	if !isMixed {
 		toWrite, _ := virtDir.Touch(name)
 		for i := range files {
@@ -632,7 +632,7 @@ func (files Files) Indent(name string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	virtDir, _ := MakeFile(files[0].ParentPath)
+	virtDir, _ := MakeFile(files[0].ParentPath())
 	toPlace, _ := virtDir.Mkdir(name)
 	files.Paste(*toPlace[0])
 	files.Delete()
@@ -643,7 +643,7 @@ func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	parent := files[0].ParentPath
+	parent := files[0].ParentPath()
 	if len(files) == len(name) {
 		for i := range files {
 			newFileName := renameExist(parent + "/" + name[i])
@@ -669,7 +669,7 @@ func (files Files) Rename(name ...string) error {
 			}
 			for i, name := range newNames {
 				newName := renameExist(name)
-				os.Rename(files[i].Path, files[i].ParentPath+newName)
+				os.Rename(files[i].Path, files[i].ParentPath()+newName)
 			}
 			tempFile.Delete()
 		}
@@ -687,7 +687,7 @@ func (files Files) Archive(name string) error {
 	}
 	for i := range files {
 		extension := filepath.Ext(name)
-		newFileName := renameExist(files[i].ParentPath + "/" + name)
+		newFileName := renameExist(files[i].ParentPath() + "/" + name)
 		switch extension {
 		case ".zip":
 			zipit(files[i].Path, newFileName)
@@ -707,8 +707,8 @@ func (files Files) Unarchive(name string) error {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
-		newFileName := renameExist(files[i].ParentPath + "/" + name)
-		switch files[i].Exte {
+		newFileName := renameExist(files[i].ParentPath() + "/" + name)
+		switch files[i].GetExte() {
 		case ".zip":
 			unzip(files[i].Path, newFileName)
 		case ".tar":
@@ -810,7 +810,7 @@ func (files Files) Find(finder Finder) Files {
 		return files
 	}
 	for i := range files {
-		if files[i].Mime[:4] != "text" {
+		if files[i].GetMime()[:4] != "text" {
 			continue
 		}
 		readAndFind(files[i], finder)
