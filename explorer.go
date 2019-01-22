@@ -639,6 +639,23 @@ func (files Files) Indent(name string) error {
 	return nil
 }
 
+func (files Files) Outdent(name ...string) error {
+	if len(files) == 0 {
+		return fmt.Errorf("No file selected")
+	}
+	virtDir, _ := MakeFile(files[0].ParentPath())
+	virtDir, _ = MakeFile(virtDir.ParentPath())
+	if name[0] != "" {
+		toPlace, _ := virtDir.Mkdir(name[0])
+		files.Paste(*toPlace[0])
+		files.Delete()
+	} else {
+		files.Paste(virtDir)
+		files.Delete()
+	}
+	return nil
+}
+
 func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
@@ -810,7 +827,8 @@ func (files Files) Find(finder Finder) Files {
 		return files
 	}
 	for i := range files {
-		if files[i].GetMime()[:4] != "text" {
+		files[i].MapLine = make(map[int]string)
+		if files[i].GetMime()[1] != "text" {
 			continue
 		}
 		readAndFind(files[i], finder)

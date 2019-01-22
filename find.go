@@ -235,7 +235,7 @@ func max(x int, y int) int {
 	return y
 }
 
-//REGEXP and STRING finder WITHING THE FILE
+//REGEXP and STRING finder WITHIN THE FILE
 //source https://github.com/rodkranz/ff/
 type Finder struct {
 	Text  string

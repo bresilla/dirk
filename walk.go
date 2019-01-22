@@ -123,6 +123,7 @@ func Walk(pathname string, options *Options) error {
 		return errors.Errorf("cannot Walk non-directory: %s", pathname)
 	}
 	dirent := &Dirent{
+		path: pathname,
 		name: filepath.Base(pathname),
 		mode: mode & os.ModeType,
 	}
@@ -351,7 +352,7 @@ func readdirents(osDirname string, scratchBuffer []byte) (Dirents, error) {
 				mode = fi.Mode() & os.ModeType
 			}
 
-			entries = append(entries, &Dirent{name: osChildname, mode: mode})
+			entries = append(entries, &Dirent{name: osChildname, mode: mode, path: osDirname})
 		}
 	}
 	if err = dh.Close(); err != nil {

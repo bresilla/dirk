@@ -2,6 +2,7 @@ package dirk
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,13 +16,15 @@ import (
 type Dirent struct {
 	name string
 	path string
+	file os.FileInfo
 	mode os.FileMode
+	stat *syscall.Stat_t
 }
 
-func (de Dirent) IsDir() bool     { return de.mode&os.ModeDir != 0 }
-func (de Dirent) IsRegular() bool { return de.mode&os.ModeType == 0 }
-func (de Dirent) IsSymlink() bool { return de.mode&os.ModeSymlink != 0 }
-func (de Dirent) IsHidden() bool  { return string(de.name[0]) == "." }
+func (d Dirent) IsDir() bool     { return d.mode&os.ModeDir != 0 }
+func (d Dirent) IsRegular() bool { return d.mode&os.ModeType == 0 }
+func (d Dirent) IsSymlink() bool { return d.mode&os.ModeSymlink != 0 }
+func (d Dirent) IsHidden() bool  { return string(d.name[0]) == "." }
 
 type Dirents []*Dirent
 
@@ -30,8 +33,9 @@ func (l Dirents) Less(i, j int) bool { return l[i].name < l[j].name }
 func (l Dirents) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 
 type File struct {
-	*Dirent
+	T    *Dirent
 	File os.FileInfo
+	Stat *syscall.Stat_t
 	Path string
 	Name string
 
@@ -50,33 +54,35 @@ func MakeFile(dir string) (file File, err error) {
 	if err != nil {
 		return
 	}
-	dirent := &Dirent{
+	file.T = &Dirent{
 		name: filepath.Base(dir),
 		path: dir,
+		file: f,
 		mode: f.Mode(),
+		stat: f.Sys().(*syscall.Stat_t),
 	}
 	file = File{
-		File: f,
-		Name: dirent.name,
-		Nick: dirent.name,
-		Path: dirent.path,
+		File: file.T.file,
+		Stat: file.T.stat,
+		Name: file.T.name,
+		Nick: file.T.name,
+		Path: file.T.path,
 	}
-	file.MapLine = make(map[int]string)
 	return
 }
 
-func (f File) IsDir() bool     { return f.File.Mode()&os.ModeDir != 0 }
-func (f File) IsRegular() bool { return f.File.Mode()&os.ModeType == 0 }
-func (f File) IsSymlink() bool { return f.File.Mode()&os.ModeSymlink != 0 }
-func (f File) IsHidden() bool  { return string(f.Name[0]) == "." }
-
-func (f File) GetExte() string { return getExte(f) }
-func (f File) GetIcon() string { return getIcon(f) }
-func (f File) GetMime() string { return getMime(f) }
-
-func (f File) SizeINT(du bool) int64  { return getSize(f, du) }
-func (f File) SizeSTR(du bool) string { return byteCountSI(f.SizeINT(du)) }
-
+func (f File) IsDir() bool             { return f.File.Mode()&os.ModeDir != 0 }
+func (f File) IsRegular() bool         { return f.File.Mode()&os.ModeType == 0 }
+func (f File) IsSymlink() bool         { return f.File.Mode()&os.ModeSymlink != 0 }
+func (f File) IsHidden() bool          { return string(f.Name[0]) == "." }
+func (f File) GetExte() string         { return getExte(f) }
+func (f File) GetIcon() string         { return getIcon(f) }
+func (f File) GetMime() []string       { return getMime(f) }
+func (f File) SizeINT(du bool) int64   { return getSize(f, du) }
+func (f File) SizeSTR(du bool) string  { return byteCountSI(f.SizeINT(du)) }
+func (f File) TimeBirth() time.Time    { return timespecToTime(f.Stat.Mtim) }
+func (f File) TimeAccess() time.Time   { return timespecToTime(f.Stat.Atim) }
+func (f File) TimeChange() time.Time   { return timespecToTime(f.Stat.Ctim) }
 func (f File) Parent() string          { return getParent(f) }
 func (f File) ParentPath() string      { return getParentPath(f) }
 func (f File) SiblingPaths() []string  { return elements(f.ParentPath()) }
@@ -108,8 +114,7 @@ func (e Files) Len() int               { return len(e) }
 func (e Files) Swap(i, j int)          { e[i], e[j] = e[j], e[i] }
 func (e Files) Less(i, j int) bool     { return e[i].Nick[0:] < e[j].Nick[0:] }
 func (e Files) SortSize(i, j int) bool { return e[i].SizeINT(DiskUse) < e[j].SizeINT(DiskUse) }
-
-//func (e Files) SortDate(i, j int) bool { return e[i].BrtTime.Before(e[j].BrtTime) }
+func (e Files) SortDate(i, j int) bool { return e[i].TimeBirth().Before(e[j].TimeBirth()) }
 
 type Element struct {
 	sync.RWMutex
@@ -122,7 +127,7 @@ func (e *Element) Add(item File) {
 	e.files = append(e.files, &item)
 }
 
-func fileList(recurrent bool, dir File) (paths Files, err error) {
+func fileList(recurrent bool, dir *File) (paths Files, err error) {
 	var wg sync.WaitGroup
 	tempfiles := Element{}
 	var file File
@@ -144,14 +149,13 @@ func fileList(recurrent bool, dir File) (paths Files, err error) {
 			ScratchBuffer: make([]byte, 64*1024),
 		})
 	} else {
-		children, err := ReadDirnames(dir.Path, nil)
+		children, err := ioutil.ReadDir(dir.Path)
 		if err != nil {
 			return paths, err
 		}
-		sort.Strings(children)
 		for _, child := range children {
-			osPathname := path.Join(dir.Path + "/" + child)
 			wg.Add(1)
+			osPathname := path.Join(dir.Path + "/" + child.Name())
 			go func() {
 				if file, err = MakeFile(osPathname); err == nil {
 					tempfiles.Add(file)
@@ -166,8 +170,7 @@ func fileList(recurrent bool, dir File) (paths Files, err error) {
 
 func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list Files) {
 	files, folder := Files{}, Files{}
-
-	paths, _ := fileList(recurrent, dir)
+	paths, _ := fileList(recurrent, &dir)
 	for _, f := range paths {
 		for i := range IgnoreSlice {
 			if f.Name == IgnoreSlice[i] {
@@ -317,16 +320,17 @@ func getIcon(f File) string {
 	}
 }
 
-func getMime(f File) string {
+func getMime(f File) (mime []string) {
 	if f.IsDir() {
-		return "folder/folder"
+		mime = strings.Split("folder/folder", "/")
 	} else {
-		mime, _, _ := DetectFile(f.Path)
-		if mime == "" {
-			return "file/default"
+		getmim, _, _ := DetectFile(f.Path)
+		if getmim == "" {
+			getmim = "file/default"
 		}
-		return mime
+		mime = strings.Split(getmim, "/")
 	}
+	return mime
 }
 
 func getExte(f File) string {
