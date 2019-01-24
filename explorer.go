@@ -435,10 +435,17 @@ func (dir File) ListDir() Files {
 
 func (dir File) Select(files Files) Files {
 	selected := Files{}
+	active := File{}
 	for i := range files {
-		if files[i].Selected || files[i].Active {
+		if files[i].Selected {
 			selected = append(selected, files[i])
 		}
+		if files[i].Active {
+			active = *files[i]
+		}
+	}
+	if len(selected) == 0 {
+		selected = append(selected, &active)
 	}
 	return selected
 }
