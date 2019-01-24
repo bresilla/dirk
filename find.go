@@ -257,13 +257,13 @@ func readAndFind(file *File, finder Finder) {
 		if finder.Regex != nil {
 			words := finder.Regex.FindAllString(line, -1)
 			if len(words) > 0 {
-				file.MapLine[numLine] = line
+				file.mapLine[numLine] = line
 			}
 		} else if len(finder.Text) != 0 {
 			if strings.Contains(line, finder.Text) {
-				file.MapLine[numLine] = line
+				file.mapLine[numLine] = line
 			}
 		}
 	}
-	file.NumLines = numLine
+	file.numLines = numLine
 }

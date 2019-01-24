@@ -45,8 +45,10 @@ type File struct {
 	Ignore   bool
 	Nick     string
 
-	NumLines int
-	MapLine  map[int]string
+	numLines int
+	mapLine  map[int]string
+	maxSize  int64
+	maxPath  int
 }
 
 func MakeFile(dir string) (file File, err error) {
@@ -83,6 +85,8 @@ func (f File) SizeSTR(du bool) string  { return byteCountSI(f.SizeINT(du)) }
 func (f File) TimeBirth() time.Time    { return timespecToTime(f.Stat.Mtim) }
 func (f File) TimeAccess() time.Time   { return timespecToTime(f.Stat.Atim) }
 func (f File) TimeChange() time.Time   { return timespecToTime(f.Stat.Ctim) }
+func (f File) MaxPath() int            { return f.maxPath }
+func (f File) MaxSize() int64          { return f.maxSize }
 func (f File) Parent() string          { return getParent(f) }
 func (f File) ParentPath() string      { return getParentPath(f) }
 func (f File) SiblingPaths() []string  { return elements(f.ParentPath()) }
@@ -170,24 +174,37 @@ func fileList(recurrent bool, dir *File) (paths Files, err error) {
 
 func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list Files) {
 	files, folder := Files{}, Files{}
-	paths, _ := fileList(recurrent, &dir)
-	for _, f := range paths {
+	paths, err := fileList(recurrent, &dir)
+	var maxPath int
+	var maxSize int64
+	if len(paths) == 0 || err != nil {
+		return
+	}
+	for f := range paths {
 		for i := range IgnoreSlice {
-			if f.Name == IgnoreSlice[i] {
+			if paths[f].Name == IgnoreSlice[i] {
 				goto Exit
 			}
 		}
-		if f.IsDir() {
-			if !f.IsHidden() || incHidden {
-				folder = append(folder, f)
+		if paths[f].IsDir() {
+			if !paths[f].IsHidden() || incHidden {
+				folder = append(folder, paths[f])
 			}
 		} else {
-			if !f.IsHidden() || incHidden {
-				if Recurrent {
-					f.Nick = f.Path
-				}
-				files = append(files, f)
+			if !paths[f].IsHidden() || incHidden {
+				files = append(files, paths[f])
 			}
+		}
+		if Recurrent {
+			paths[f].Nick = paths[f].Path
+		} else {
+			paths[f].Nick = paths[f].Name
+		}
+		if len(paths[f].Nick) > maxPath {
+			maxPath = len(paths[f].Nick)
+		}
+		if paths[f].SizeINT(DiskUse) > maxSize {
+			maxSize = paths[f].SizeINT(DiskUse)
 		}
 	Exit:
 	}
@@ -200,6 +217,8 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 		list = append(list, files...)
 	}
 	for i := range list {
+		list[i].maxPath = maxPath
+		list[i].maxSize = maxSize
 		list[i].Number = i
 	}
 	return
@@ -233,10 +252,27 @@ func byteCountIEC(b int64) string {
 		float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+type Counter struct {
+	mu sync.Mutex
+	x  int64
+}
+
+func (c *Counter) Add(x int64) {
+	c.mu.Lock()
+	c.x += x
+	c.mu.Unlock()
+}
+
+func (c *Counter) Value() (x int64) {
+	c.mu.Lock()
+	x = c.x
+	c.mu.Unlock()
+	return
+}
+
 func getSize(file File, dumode bool) (size int64) {
-	dir := file.Path
 	if dumode {
-		Walk(dir, &Options{
+		Walk(file.Path, &Options{
 			Callback: func(osPathname string, de *Dirent) (err error) {
 				f, err := os.Stat(osPathname)
 				if err != nil {

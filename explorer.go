@@ -827,14 +827,14 @@ func (files Files) Find(finder Finder) Files {
 		return files
 	}
 	for i := range files {
-		files[i].MapLine = make(map[int]string)
+		files[i].mapLine = make(map[int]string)
 		if files[i].GetMime()[1] != "text" {
 			continue
 		}
 		readAndFind(files[i], finder)
 	}
 	for i := range files {
-		if len(files[i].MapLine) > 0 {
+		if len(files[i].mapLine) > 0 {
 			matched = append(matched, files[i])
 		}
 	}
