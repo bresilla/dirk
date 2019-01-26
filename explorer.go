@@ -27,14 +27,6 @@ var (
 	IgnoreRecur = []string{"node_modules", ".git"}
 )
 
-func open(input string) *exec.Cmd {
-	return exec.Command("xdg-open", input)
-}
-
-func openWith(input string, appName string) *exec.Cmd {
-	return exec.Command(appName, input)
-}
-
 func renameExist(name string) string {
 	if _, err := os.Stat(name); err == nil {
 		i := 1
@@ -746,49 +738,34 @@ func (files Files) Unarchive(name string) error {
 	return nil
 }
 
-func (files Files) Run() error {
+func (files Files) Run(name string) error {
+	var cmd *exec.Cmd
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
-		if err := open(files[i].Path).Run(); err != nil {
-			return fmt.Errorf("Could not open file")
+		cmd = exec.Command(name, files[i].Path)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		err := cmd.Run()
+		if err != nil {
+			return fmt.Errorf("Error:", err)
 		}
 	}
 	return nil
 }
 
-func (files Files) Start() error {
+func (files Files) Start(name string) error {
+	var cmd *exec.Cmd
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
-		if err := open(files[i].Path).Start(); err != nil {
-			return fmt.Errorf("Could not open file")
-		}
-	}
-	return nil
-}
-
-func (files Files) RunWith(name string) error {
-	if len(files) == 0 {
-		return fmt.Errorf("No file selected")
-	}
-	for i := range files {
-		if err := openWith(name, files[i].Path).Run(); err != nil {
-			return fmt.Errorf("Could no open file")
-		}
-	}
-	return nil
-}
-
-func (files Files) StartWith(name string) error {
-	if len(files) == 0 {
-		return fmt.Errorf("No file selected")
-	}
-	for i := range files {
-		if err := openWith(name, files[i].Path).Start(); err != nil {
-			return fmt.Errorf("Could not open file")
+		cmd = exec.Command(name, files[i].Path)
+		cmd.Stdin = os.Stdin
+		err := cmd.Start()
+		if err != nil {
+			return fmt.Errorf("Error:", err)
 		}
 	}
 	return nil
