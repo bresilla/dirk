@@ -196,7 +196,8 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 			}
 		}
 		if Recurrent {
-			paths[f].Nick = paths[f].Path
+			name := strings.Join(paths[f].Ancestors()[dir.AncestorNr():], "/")
+			paths[f].Nick = "/" + name + "/" + paths[f].Name
 		} else {
 			paths[f].Nick = paths[f].Name
 		}
@@ -250,24 +251,6 @@ func byteCountIEC(b int64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB",
 		float64(b)/float64(div), "KMGTPE"[exp])
-}
-
-type Counter struct {
-	mu sync.Mutex
-	x  int64
-}
-
-func (c *Counter) Add(x int64) {
-	c.mu.Lock()
-	c.x += x
-	c.mu.Unlock()
-}
-
-func (c *Counter) Value() (x int64) {
-	c.mu.Lock()
-	x = c.x
-	c.mu.Unlock()
-	return
 }
 
 func getSize(file File, dumode bool) (size int64) {
