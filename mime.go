@@ -139,15 +139,15 @@ var (
 
 	Txt  = NewNode("text/plain", "txt", match_Txt, Html, Xml, Php, Js, Lua, Perl, Python, Json, Rtf)
 	Xml  = NewNode("text/xml; charset=utf-8", "xml", match_Xml, Svg, X3d, Kml, Collada, Gml, Gpx)
-	Json = NewNode("application/json", "json", match_Json)
+	Json = NewNode("text/json", "json", match_Json)
 	Html = NewNode("text/html; charset=utf-8", "html", match_Html)
 	Php  = NewNode("text/x-php; charset=utf-8", "php", match_Php)
 	Rtf  = NewNode("text/rtf", "rtf", match_Rtf)
 
-	Js     = NewNode("application/javascript", "js", match_Js)
+	Js     = NewNode("text/javascript", "js", match_Js)
 	Lua    = NewNode("text/x-lua", "lua", match_Lua)
 	Perl   = NewNode("text/x-perl", "pl", match_Perl)
-	Python = NewNode("application/x-python", "py", match_Python)
+	Python = NewNode("text/x-python", "py", match_Python)
 
 	Svg     = NewNode("image/svg+xml", "svg", match_False)
 	X3d     = NewNode("model/x3d+xml", "x3d", match_False)
@@ -785,7 +785,6 @@ func trimLWS(in []byte) []byte {
 	firstNonWS := 0
 	for ; firstNonWS < len(in) && isWS(in[firstNonWS]); firstNonWS++ {
 	}
-
 	return in[firstNonWS:]
 }
 
@@ -794,7 +793,6 @@ func trimRWS(in []byte) []byte {
 	lastNonWS := len(in) - 1
 	for ; lastNonWS > 0 && isWS(in[lastNonWS]); lastNonWS-- {
 	}
-
 	return in[:lastNonWS+1]
 }
 

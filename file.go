@@ -73,35 +73,28 @@ func MakeFile(dir string) (file File, err error) {
 	return
 }
 
-func (f File) IsDir() bool             { return f.File.Mode()&os.ModeDir != 0 }
-func (f File) IsRegular() bool         { return f.File.Mode()&os.ModeType == 0 }
-func (f File) IsSymlink() bool         { return f.File.Mode()&os.ModeSymlink != 0 }
-func (f File) IsHidden() bool          { return string(f.Name[0]) == "." }
-func (f File) GetExte() string         { return getExte(f) }
-func (f File) GetIcon() string         { return getIcon(f) }
-func (f File) GetMime() []string       { return getMime(f) }
-func (f File) SizeINT(du bool) int64   { return getSize(f, du) }
-func (f File) SizeSTR(du bool) string  { return byteCountSI(f.SizeINT(du)) }
-func (f File) TimeBirth() time.Time    { return timespecToTime(f.Stat.Mtim) }
-func (f File) TimeAccess() time.Time   { return timespecToTime(f.Stat.Atim) }
-func (f File) TimeChange() time.Time   { return timespecToTime(f.Stat.Ctim) }
-func (f File) MaxPath() int            { return f.maxPath }
-func (f File) MaxSize() int64          { return f.maxSize }
-func (f File) Parent() string          { return getParent(f) }
-func (f File) ParentPath() string      { return getParentPath(f) }
-func (f File) SiblingPaths() []string  { return elements(f.ParentPath()) }
-func (f File) Siblings() []string      { return basename(f.SiblingPaths()) }
-func (f File) SiblingNr() int          { return len(f.Siblings()) }
-func (f File) AncestorPaths() []string { return ancestor(f.ParentPath()) }
-func (f File) Ancestors() []string     { return basename(f.AncestorPaths()) }
-func (f File) AncestorNr() int         { return len(f.Ancestors()) }
-func (f File) ChildrenPaths() []string { return elements(f.Path) }
-func (f File) Childrens() []string     { return basename(f.ChildrenPaths()) }
-func (f File) ChildrenNr() int         { return len(f.Childrens()) }
+func (f File) IsDir() bool            { return f.File.Mode()&os.ModeDir != 0 }
+func (f File) IsRegular() bool        { return f.File.Mode()&os.ModeType == 0 }
+func (f File) IsSymlink() bool        { return f.File.Mode()&os.ModeSymlink != 0 }
+func (f File) IsHidden() bool         { return string(f.Name[0]) == "." }
+func (f File) MimeExte() string       { return getExte(f) }
+func (f File) MimeIcon() string       { return getIcon(f) }
+func (f File) MimeType() []string     { return getMime(f) }
+func (f File) SizeINT(du bool) int64  { return getSize(f, du) }
+func (f File) SizeSTR(du bool) string { return byteCountSI(f.SizeINT(du)) }
+func (f File) TimeBirth() time.Time   { return timespecToTime(f.Stat.Mtim) }
+func (f File) TimeAccess() time.Time  { return timespecToTime(f.Stat.Atim) }
+func (f File) TimeChange() time.Time  { return timespecToTime(f.Stat.Ctim) }
+func (f File) MaxPath() int           { return f.maxPath }
+func (f File) MaxSize() int64         { return f.maxSize }
+func (f File) Parent() Files          { return Filer([]string{getParentPath(f)}) }
+func (f File) Siblings() Files        { return Filer(elements(getParentPath(f))) }
+func (f File) Ancestors() Files       { return Filer(ancestor(getParentPath(f))) }
+func (f File) Childrens() Files       { return Filer(elements(f.Path)) }
 
 type Files []*File
 
-func MakeFiles(path ...string) (files Files, err error) {
+func MakeFiles(path []string) (files Files, err error) {
 	files = Files{}
 	for i := range path {
 		if file, err := MakeFile(path[i]); err != nil {
@@ -111,6 +104,13 @@ func MakeFiles(path ...string) (files Files, err error) {
 		}
 	}
 	return files, nil
+}
+
+func Filer(path []string) (files Files) {
+	if files, err := MakeFiles(path); err == nil {
+		return files
+	}
+	return files
 }
 
 func (e Files) String(i int) string    { return e[i].Name }
@@ -196,7 +196,7 @@ func chooseFile(incFolder, incFiles, incHidden, recurrent bool, dir File) (list 
 			}
 		}
 		if Recurrent {
-			name := strings.Join(paths[f].Ancestors()[dir.AncestorNr():], "/")
+			name := strings.Join(basename(ancestor(getParentPath(*paths[f])))[len(dir.Ancestors()):], "/")
 			paths[f].Nick = "/" + name + "/" + paths[f].Name
 		} else {
 			paths[f].Nick = paths[f].Name

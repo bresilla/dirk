@@ -473,6 +473,16 @@ func (dir File) Mkdir(names ...string) (Files, error) {
 	return files, nil
 }
 
+func (dir Files) Current() Files {
+	selected := Files{}
+	for i := range dir {
+		if dir[i].Active {
+			selected = append(selected, dir[i])
+		}
+	}
+	return selected
+}
+
 func (files Files) Paste(destin File) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
@@ -613,7 +623,7 @@ func (files Files) Union(name string) error {
 			isMixed = true
 		}
 	}
-	virtDir, _ := MakeFile(files[0].ParentPath())
+	virtDir, _ := MakeFile(files[0].Parent()[0].Path)
 	if !isMixed {
 		toWrite, _ := virtDir.Touch(name)
 		for i := range files {
@@ -631,7 +641,7 @@ func (files Files) Indent(name string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	virtDir, _ := MakeFile(files[0].ParentPath())
+	virtDir, _ := MakeFile(files[0].Parent()[0].Path)
 	toPlace, _ := virtDir.Mkdir(name)
 	files.Paste(*toPlace[0])
 	files.Delete()
@@ -642,8 +652,8 @@ func (files Files) Outdent(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	virtDir, _ := MakeFile(files[0].ParentPath())
-	virtDir, _ = MakeFile(virtDir.ParentPath())
+	virtDir, _ := MakeFile(files[0].Parent()[0].Path)
+	virtDir, _ = MakeFile(virtDir.Parent()[0].Path)
 	if name[0] != "" {
 		toPlace, _ := virtDir.Mkdir(name[0])
 		files.Paste(*toPlace[0])
@@ -659,7 +669,7 @@ func (files Files) Rename(name ...string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("No file selected")
 	}
-	parent := files[0].ParentPath()
+	parent := files[0].Parent()[0].Path
 	if len(files) == len(name) {
 		for i := range files {
 			newFileName := renameExist(parent + "/" + name[i])
@@ -685,7 +695,7 @@ func (files Files) Rename(name ...string) error {
 			}
 			for i, name := range newNames {
 				newName := renameExist(name)
-				os.Rename(files[i].Path, files[i].ParentPath()+newName)
+				os.Rename(files[i].Path, files[i].Parent()[0].Path+newName)
 			}
 			tempFile.Delete()
 		}
@@ -703,7 +713,7 @@ func (files Files) Archive(name string) error {
 	}
 	for i := range files {
 		extension := filepath.Ext(name)
-		newFileName := renameExist(files[i].ParentPath() + "/" + name)
+		newFileName := renameExist(files[i].Parent()[0].Path + "/" + name)
 		switch extension {
 		case ".zip":
 			zipit(files[i].Path, newFileName)
@@ -723,8 +733,8 @@ func (files Files) Unarchive(name string) error {
 		return fmt.Errorf("No file selected")
 	}
 	for i := range files {
-		newFileName := renameExist(files[i].ParentPath() + "/" + name)
-		switch files[i].GetExte() {
+		newFileName := renameExist(files[i].Parent()[0].Path + "/" + name)
+		switch files[i].MimeExte() {
 		case ".zip":
 			unzip(files[i].Path, newFileName)
 		case ".tar":
@@ -812,7 +822,7 @@ func (files Files) Find(finder Finder) Files {
 	}
 	for i := range files {
 		files[i].mapLine = make(map[int]string)
-		if files[i].GetMime()[1] != "text" {
+		if files[i].MimeType()[1] != "text" {
 			continue
 		}
 		readAndFind(files[i], finder)
